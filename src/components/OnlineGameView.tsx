@@ -174,6 +174,7 @@ export function OnlineGameView({ roomId, onBack, profile }: OnlineGameViewProps)
 
   useEffect(() => {
     let channel: ReturnType<typeof supabase.channel> | null = null;
+    let pollingInterval: NodeJS.Timeout | null = null;
 
     const setupSubscription = async () => {
       // Subscribe to game room changes with improved real-time handling
@@ -247,6 +248,27 @@ export function OnlineGameView({ roomId, onBack, profile }: OnlineGameViewProps)
             }, 3000);
           }
         });
+
+      // Polling fallback: Check for opponent every 2 seconds while waiting
+      pollingInterval = setInterval(async () => {
+        const { data: room } = await supabase
+          .from('game_rooms')
+          .select('*')
+          .eq('id', roomId)
+          .single();
+
+        if (room) {
+          const bothConnected = room.black_player_id !== null && room.white_player_id !== null;
+          if (bothConnected) {
+            console.log('Polling: Both players connected!');
+            setOpponentConnected(true);
+            setRoomStatus(room.status);
+            setGameState(jsonToGameState(room.game_state));
+            setWhiteName(room.white_player_name || 'Guest');
+            setBlackName(room.black_player_name || 'Guest');
+          }
+        }
+      }, 2000);
     };
 
     setupSubscription();
@@ -255,6 +277,9 @@ export function OnlineGameView({ roomId, onBack, profile }: OnlineGameViewProps)
       console.log('Unsubscribing from game room channel');
       if (channel) {
         supabase.removeChannel(channel);
+      }
+      if (pollingInterval) {
+        clearInterval(pollingInterval);
       }
     };
   }, [roomId, playerId, playerName]);
