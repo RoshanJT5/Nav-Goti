@@ -144,7 +144,8 @@ export default function Home() {
             <div className="max-w-4xl mx-auto flex items-center justify-between">
               <button
                 onClick={() => setScreen('home')}
-                className="flex items-center gap-2 text-gray-400 hover:text-white transition-colors"
+                className="flex items-center gap-2 transition-colors"
+                style={{ color: theme.textColor }}
               >
                 <span className="text-2xl font-bold" style={{ color: theme.titleColor }}>Mill</span>
               </button>
@@ -243,7 +244,7 @@ export default function Home() {
               <div className="w-10 h-10 rounded-lg flex items-center justify-center shadow-lg" style={{ backgroundColor: theme.accentColor }}>
                 <span className="text-white font-bold text-xl">M</span>
               </div>
-              <span className="text-2xl font-bold text-white">Mill Game</span>
+              <span className="text-2xl font-bold" style={{ color: theme.titleColor }}>Mill Game</span>
             </div>
             
             <div className="flex items-center gap-4">
@@ -271,7 +272,7 @@ export default function Home() {
                   style={{ 
                     backgroundColor: theme.cardBg, 
                     borderColor: theme.boardLineColor + '20',
-                    color: '#ffffff'
+                    color: theme.textColor
                   }}
                 >
                   <div className="w-6 h-6 rounded-full flex items-center justify-center text-[10px] font-bold text-white shadow-sm" style={{ backgroundColor: theme.accentColor }}>
@@ -447,17 +448,17 @@ export default function Home() {
                 value={difficulty}
                 onValueChange={(v) => setDifficulty(v as Difficulty)}
               >
-                  <SelectTrigger className="font-bold text-white" style={{ backgroundColor: theme.appBackground, borderColor: theme.boardLineColor + '20' }}>
+                  <SelectTrigger className="font-bold" style={{ backgroundColor: theme.appBackground, borderColor: theme.boardLineColor + '20', color: theme.textColor }}>
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent style={{ backgroundColor: theme.cardBg, borderColor: theme.boardLineColor + '20' }}>
-                    <SelectItem value="easy" className="font-bold text-white">
+                    <SelectItem value="easy" className="font-bold" style={{ color: theme.textColor }}>
                       Easy - Great for beginners
                     </SelectItem>
-                    <SelectItem value="medium" className="font-bold text-white">
+                    <SelectItem value="medium" className="font-bold" style={{ color: theme.textColor }}>
                       Medium - Balanced challenge
                     </SelectItem>
-                    <SelectItem value="hard" className="font-bold text-white">
+                    <SelectItem value="hard" className="font-bold" style={{ color: theme.textColor }}>
                       Hard - Expert level AI
                     </SelectItem>
                   </SelectContent>
@@ -465,8 +466,8 @@ export default function Home() {
 
             <Button
               onClick={startAIGame}
-              className="w-full text-white"
-              style={{ backgroundColor: theme.accentColor }}
+              className="w-full"
+              style={{ backgroundColor: theme.accentColor, color: theme.isDark ? '#ffffff' : '#ffffff' }}
             >
               <Play className="w-4 h-4 mr-2" />
               Start Game
@@ -476,17 +477,21 @@ export default function Home() {
       </Dialog>
 
       <Dialog open={showOnlineDialog} onOpenChange={setShowOnlineDialog}>
-        <DialogContent className="bg-[#262421] border-[#3d3a37] text-white max-w-md">
+        <DialogContent style={{ backgroundColor: theme.cardBg, borderColor: theme.boardLineColor + '20', color: theme.textColor }}>
           <DialogHeader>
-            <DialogTitle className="flex items-center gap-2">
-              <Globe className="w-5 h-5 text-[#e5a02b]" />
+            <DialogTitle className="flex items-center gap-2" style={{ color: theme.titleColor }}>
+              <Globe className="w-5 h-5" style={{ color: theme.accentColor }} />
               Online Multiplayer
             </DialogTitle>
           </DialogHeader>
           <div className="space-y-5 py-4">
             <Button
               onClick={handleRandomMatch}
-              className="w-full bg-gradient-to-r from-[#629924] to-[#81b64c] hover:from-[#4d7a1c] hover:to-[#6d9a3f] h-14 text-lg"
+              style={{ 
+                background: theme.isDark ? `linear-gradient(to right, ${theme.accentColor}, ${theme.mutedColor})` : theme.accentColor,
+                color: theme.isDark ? '#ffffff' : '#000000'
+              }}
+              className="w-full h-14 text-lg hover:opacity-90"
             >
               <Shuffle className="w-5 h-5 mr-2" />
               Find Random Opponent
@@ -494,32 +499,34 @@ export default function Home() {
 
             <div className="relative">
               <div className="absolute inset-0 flex items-center">
-                <span className="w-full border-t border-[#3d3a37]" />
+                <span className="w-full border-t" style={{ borderColor: theme.boardLineColor + '20' }} />
               </div>
               <div className="relative flex justify-center text-xs uppercase">
-                <span className="bg-[#262421] px-2 text-gray-500">or play with friends</span>
+                <span style={{ backgroundColor: theme.cardBg, color: theme.boardLineColor + '60' }} className="px-2">or play with friends</span>
               </div>
             </div>
 
             <div>
-              <h4 className="text-sm font-semibold mb-2">Create New Room</h4>
+              <h4 className="text-sm font-semibold mb-2" style={{ color: theme.headingColor }}>Create New Room</h4>
               <Button
                 onClick={generateRoomCode}
                 variant="outline"
-                className="w-full border-[#3d3a37] text-gray-300 hover:bg-[#3d3a37]"
+                style={{ borderColor: theme.boardLineColor + '20', color: theme.textColor }}
+                className="w-full hover:opacity-70"
               >
                 Generate Room Code
               </Button>
               {roomCode && (
                 <div className="mt-3 flex items-center gap-2">
-                  <div className="flex-1 bg-[#3d3a37] rounded-lg px-4 py-2 font-mono text-lg text-center">
+                  <div className="flex-1 rounded-lg px-4 py-2 font-mono text-lg text-center" style={{ backgroundColor: theme.cardBg, color: theme.textColor, border: `1px solid ${theme.boardLineColor}20` }}>
                     {roomCode}
                   </div>
                   <Button
                     size="icon"
                     variant="outline"
                     onClick={copyRoomCode}
-                    className="border-[#3d3a37] hover:bg-[#3d3a37]"
+                    style={{ borderColor: theme.boardLineColor + '20', color: theme.textColor }}
+                    className="hover:opacity-70"
                   >
                     {copied ? (
                       <Check className="w-4 h-4 text-green-500" />
@@ -533,20 +540,21 @@ export default function Home() {
 
             <div className="relative">
               <div className="absolute inset-0 flex items-center">
-                <span className="w-full border-t border-[#3d3a37]" />
+                <span className="w-full border-t" style={{ borderColor: theme.boardLineColor + '20' }} />
               </div>
               <div className="relative flex justify-center text-xs uppercase">
-                <span className="bg-[#262421] px-2 text-gray-500">or</span>
+                <span style={{ backgroundColor: theme.cardBg, color: theme.boardLineColor + '60' }} className="px-2">or</span>
               </div>
             </div>
 
             <div>
-              <h4 className="text-sm font-semibold mb-2">Join Existing Room</h4>
+              <h4 className="text-sm font-semibold mb-2" style={{ color: theme.headingColor }}>Join Existing Room</h4>
               <Input
                 placeholder="Enter room code"
                 value={roomCode}
                 onChange={(e) => setRoomCode(e.target.value.toUpperCase())}
-                className="bg-[#3d3a37] border-[#4d4a47] text-white placeholder:text-gray-500"
+                style={{ backgroundColor: theme.cardBg, borderColor: theme.boardLineColor + '20', color: theme.textColor }}
+                className="placeholder:opacity-60"
               />
             </div>
 
