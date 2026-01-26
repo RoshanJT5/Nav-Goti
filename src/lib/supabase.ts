@@ -3,14 +3,36 @@ import { createClient } from '@supabase/supabase-js';
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
 const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
 
-export const supabase = createClient(supabaseUrl, supabaseAnonKey);
+export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
+  realtime: {
+    params: {
+      eventsPerSecond: 10,
+    },
+  },
+  auth: {
+    persistSession: true,
+    autoRefreshToken: true,
+  },
+});
 
 export interface GameRoom {
   id: string;
   white_player_id: string | null;
+  white_player_name: string | null;
   black_player_id: string | null;
+  black_player_name: string | null;
   game_state: GameStateJSON;
   status: 'waiting' | 'playing' | 'finished';
+  created_at: string;
+  updated_at: string;
+}
+
+export interface MatchmakingQueue {
+  id: string;
+  player_id: string;
+  player_name: string;
+  status: 'waiting' | 'matched' | 'cancelled';
+  room_id: string | null;
   created_at: string;
   updated_at: string;
 }

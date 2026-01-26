@@ -30,9 +30,17 @@ export function GameChat({ roomId, playerId, playerName, themeId = 'classic' }: 
   const [isOpen, setIsOpen] = useState(false);
   const [unreadCount, setUnreadCount] = useState(0);
   const scrollRef = useRef<HTMLDivElement>(null);
+  const isOpenRef = useRef(isOpen);
   const theme = getTheme(themeId);
 
+  // Keep ref in sync with state
   useEffect(() => {
+    isOpenRef.current = isOpen;
+  }, [isOpen]);
+
+  useEffect(() => {
+    let isSubscribed = true;
+
     // Fetch existing messages
     const fetchMessages = async () => {
       const { data, error } = await supabase
@@ -41,7 +49,12 @@ export function GameChat({ roomId, playerId, playerName, themeId = 'classic' }: 
         .eq('room_id', roomId)
         .order('created_at', { ascending: true });
 
-      if (data) {
+      if (error) {
+        // Only log actual errors, not "no rows" errors
+        if (error.code !== 'PGRST116') {
+          console.error('Error fetching chat messages:', error);
+        }
+      } else if (data && isSubscribed) {
         setMessages(data);
       }
     };
@@ -50,7 +63,11 @@ export function GameChat({ roomId, playerId, playerName, themeId = 'classic' }: 
 
     // Subscribe to new messages
     const channel = supabase
-      .channel(`chat:${roomId}`)
+      .channel(`chat:${roomId}`, {
+        config: {
+          broadcast: { self: true },
+        },
+      })
       .on(
         'postgres_changes',
         {
@@ -60,19 +77,31 @@ export function GameChat({ roomId, playerId, playerName, themeId = 'classic' }: 
           filter: `room_id=eq.${roomId}`
         },
         (payload) => {
+          if (!isSubscribed) return;
           const msg = payload.new as Message;
-          setMessages((prev) => [...prev, msg]);
-          if (!isOpen) {
+          setMessages((prev) => {
+            // Prevent duplicate messages
+            if (prev.some(m => m.id === msg.id)) return prev;
+            return [...prev, msg];
+          });
+          if (!isOpenRef.current) {
             setUnreadCount((prev) => prev + 1);
           }
         }
       )
-      .subscribe();
+      .subscribe((status) => {
+        if (status === 'SUBSCRIBED') {
+          console.log('Chat channel subscribed successfully');
+        } else if (status === 'CHANNEL_ERROR') {
+          console.error('Chat channel subscription error');
+        }
+      });
 
     return () => {
+      isSubscribed = false;
       supabase.removeChannel(channel);
     };
-  }, [roomId, isOpen]);
+  }, [roomId]); // Remove isOpen from dependencies to prevent re-subscriptions
 
   useEffect(() => {
     if (scrollRef.current) {
@@ -109,12 +138,12 @@ export function GameChat({ roomId, playerId, playerName, themeId = 'classic' }: 
   return (
     <div className="fixed bottom-4 right-4 z-50 flex flex-col items-end">
       {isOpen && (
-        <div 
+        <div
           className="mb-4 w-80 h-[450px] rounded-2xl shadow-2xl flex flex-col border overflow-hidden animate-in slide-in-from-bottom-4 duration-300"
           style={{ backgroundColor: theme.cardBg, borderColor: theme.lineColor + '20' }}
         >
           {/* Header */}
-          <div 
+          <div
             className="px-4 py-3 flex items-center justify-between border-b"
             style={{ backgroundColor: theme.headerBg, borderColor: theme.lineColor + '10' }}
           >
@@ -122,7 +151,7 @@ export function GameChat({ roomId, playerId, playerName, themeId = 'classic' }: 
               <MessageCircle className="w-5 h-5" style={{ color: theme.accentColor }} />
               <span className="font-bold" style={{ color: theme.lineColor }}>Game Chat</span>
             </div>
-            <button 
+            <button
               onClick={toggleChat}
               className="p-1 rounded-full hover:bg-black/10 transition-colors"
             >
@@ -134,8 +163,8 @@ export function GameChat({ roomId, playerId, playerName, themeId = 'classic' }: 
           <ScrollArea className="flex-1 p-4" ref={scrollRef}>
             <div className="space-y-3">
               {messages.map((msg) => (
-                <div 
-                  key={msg.id} 
+                <div
+                  key={msg.id}
                   className={`flex flex-col ${msg.player_id === playerId ? 'items-end' : 'items-start'}`}
                 >
                   <div className="flex items-center gap-2 mb-1">
@@ -143,13 +172,12 @@ export function GameChat({ roomId, playerId, playerName, themeId = 'classic' }: 
                       {msg.player_id === playerId ? 'You' : msg.player_name}
                     </span>
                   </div>
-                  <div 
-                    className={`px-3 py-2 rounded-2xl max-w-[90%] text-sm shadow-sm ${
-                      msg.player_id === playerId 
-                        ? 'rounded-tr-none' 
-                        : 'rounded-tl-none'
-                    }`}
-                    style={{ 
+                  <div
+                    className={`px-3 py-2 rounded-2xl max-w-[90%] text-sm shadow-sm ${msg.player_id === playerId
+                      ? 'rounded-tr-none'
+                      : 'rounded-tl-none'
+                      }`}
+                    style={{
                       backgroundColor: msg.player_id === playerId ? theme.accentColor : theme.lineColor + '10',
                       color: msg.player_id === playerId ? '#fff' : theme.lineColor
                     }}
@@ -168,7 +196,7 @@ export function GameChat({ roomId, playerId, playerName, themeId = 'classic' }: 
           </ScrollArea>
 
           {/* Input */}
-          <form 
+          <form
             onSubmit={handleSendMessage}
             className="p-3 border-t flex gap-2"
             style={{ backgroundColor: theme.headerBg, borderColor: theme.lineColor + '10' }}
@@ -178,15 +206,15 @@ export function GameChat({ roomId, playerId, playerName, themeId = 'classic' }: 
               onChange={(e) => setNewMessage(e.target.value)}
               placeholder="Type a message..."
               className="h-10 border-0 focus-visible:ring-1 focus-visible:ring-offset-0 bg-white/5"
-              style={{ 
+              style={{
                 backgroundColor: theme.lineColor + '05',
                 color: theme.lineColor,
                 borderColor: theme.lineColor + '10'
               }}
             />
-            <Button 
-              type="submit" 
-              size="icon" 
+            <Button
+              type="submit"
+              size="icon"
               className="h-10 w-10 shrink-0"
               style={{ backgroundColor: theme.accentColor }}
             >

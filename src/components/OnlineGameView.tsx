@@ -180,7 +180,7 @@ export function OnlineGameView({ roomId, onBack, profile }: OnlineGameViewProps)
       channel = supabase
         .channel(`room:${roomId}`, {
           config: {
-            broadcast: { self: false }, // Don't receive our own updates
+            broadcast: { self: true }, // Receive our own updates for confirmation
             presence: { key: playerId },
           },
         })
@@ -196,9 +196,9 @@ export function OnlineGameView({ roomId, onBack, profile }: OnlineGameViewProps)
             const room = payload.new as any;
             const updateTime = new Date(room.updated_at).getTime();
 
-            // Update immediately without timestamp checking to avoid lag
-            // The database handles conflict resolution
-            console.log('Receiving game state update from opponent');
+            // Always update state to stay in sync with server
+            // This ensures both players see the same game state
+            console.log('Receiving game state update:', updateTime);
             lastUpdateTimestamp.current = updateTime;
             setGameState(jsonToGameState(room.game_state));
             setRoomStatus(room.status);
@@ -311,7 +311,7 @@ export function OnlineGameView({ roomId, onBack, profile }: OnlineGameViewProps)
               await new Promise(resolve => setTimeout(resolve, 100 * retryCount));
               return attemptUpdate();
             }
-            
+
             // After max retries, try to recover the state
             const { data: currentRoom } = await supabase
               .from('game_rooms')
@@ -389,7 +389,7 @@ export function OnlineGameView({ roomId, onBack, profile }: OnlineGameViewProps)
     // Optimistic update: Update local state immediately for responsive UI
     setGameState(newState);
 
-    // Then sync to server (this will trigger opponent's real-time update)
+    // Then sync to server (realtime subscription will confirm for both players)
     await updateGameState(newState);
   }, [gameState, isPlayerTurn, opponentConnected, roomId]);
 

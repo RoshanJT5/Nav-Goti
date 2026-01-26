@@ -49,6 +49,8 @@ export function MatchmakingView({ onMatch, onCancel, profile }: MatchmakingViewP
 
     const joinMatchmaking = async () => {
       try {
+        console.log('Initiating matchmaking for:', playerId);
+
         // Check for existing waiting players
         const { data: existingQueue, error: queueFetchError } = await supabase
           .from('matchmaking_queue')
@@ -61,14 +63,13 @@ export function MatchmakingView({ onMatch, onCancel, profile }: MatchmakingViewP
 
         // PGRST116 means "no rows returned" which is expected when queue is empty
         if (queueFetchError && queueFetchError.code !== 'PGRST116') {
-          console.error('Error checking matchmaking queue:', queueFetchError);
-          if (isSubscribed) {
-            setStatus('error');
-          }
+          console.error('Matchmaking: Error checking queue:', queueFetchError.message || queueFetchError);
+          if (isSubscribed) setStatus('error');
           return;
         }
 
         if (existingQueue && isSubscribed && !cleanupRef.current) {
+          console.log('Matchmaking: Found existing player, creating room...');
           const roomId = `game_${Date.now()}_${Math.random().toString(36).substring(2, 8)}`;
           const initialState = createInitialState();
 
@@ -84,10 +85,8 @@ export function MatchmakingView({ onMatch, onCancel, profile }: MatchmakingViewP
           });
 
           if (roomError) {
-            console.error('Error creating game room:', roomError);
-            if (isSubscribed) {
-              setStatus('error');
-            }
+            console.error('Matchmaking: Error creating game room:', roomError.message || roomError);
+            if (isSubscribed) setStatus('error');
             return;
           }
 
@@ -98,23 +97,20 @@ export function MatchmakingView({ onMatch, onCancel, profile }: MatchmakingViewP
             .eq('id', existingQueue.id);
 
           if (updateError) {
-            console.error('Error updating queue entry:', updateError);
-            if (isSubscribed) {
-              setStatus('error');
-            }
+            console.error('Matchmaking: Error updating opponent queue entry:', updateError.message || updateError);
+            if (isSubscribed) setStatus('error');
             return;
           }
 
           if (isSubscribed) {
             setStatus('found');
-            if (isSubscribed) {
-              onMatch(roomId);
-            }
+            onMatch(roomId);
           }
           return;
         }
 
         // Create our queue entry
+        console.log('Matchmaking: No existing players, creating own queue entry...');
         const { data: queueEntry, error: queueError } = await supabase
           .from('matchmaking_queue')
           .insert({
@@ -126,17 +122,15 @@ export function MatchmakingView({ onMatch, onCancel, profile }: MatchmakingViewP
           .single();
 
         if (queueError || !queueEntry) {
-          console.error('Error creating queue entry:', queueError);
-          if (isSubscribed) {
-            setStatus('error');
-          }
+          console.error('Matchmaking: Error creating queue entry:', queueError?.message || 'No data returned');
+          if (isSubscribed) setStatus('error');
           return;
         }
 
         // Store the queue entry ID
         queueEntryIdRef.current = queueEntry.id;
 
-        // Subscribe to changes on our queue entry with better error handling
+        // Subscribe to changes on our queue entry
         channel = supabase
           .channel(`matchmaking:${queueEntry.id}`, {
             config: {
@@ -156,37 +150,25 @@ export function MatchmakingView({ onMatch, onCancel, profile }: MatchmakingViewP
               if (!isSubscribed || cleanupRef.current) return;
               const updated = payload.new as { status: string; room_id: string | null };
               if (updated.status === 'matched' && updated.room_id && isSubscribed) {
+                console.log('Matchmaking: Matched by another player!');
                 setStatus('found');
-                if (isSubscribed) {
-                  onMatch(updated.room_id!);
-                }
+                onMatch(updated.room_id);
               }
             }
           )
           .subscribe(async (status) => {
             if (!isSubscribed) return;
             if (status === 'SUBSCRIBED') {
-              console.log('Matchmaking channel subscribed successfully');
+              console.log('Matchmaking: Channel subscribed successfully');
             } else if (status === 'CHANNEL_ERROR' || status === 'CLOSED') {
-              console.error('Matchmaking channel error/closed, attempting reconnect');
-              if (isSubscribed && !cleanupRef.current) {
-                // Wait a bit before reconnecting
-                await new Promise(resolve => setTimeout(resolve, 2000));
-                if (isSubscribed && !cleanupRef.current) {
-                  // Recreate channel
-                  if (channel) {
-                    supabase.removeChannel(channel);
-                  }
-                  joinMatchmaking();
-                }
-              }
+              console.warn('Matchmaking: Channel state changed:', status);
             }
           });
 
-        // Also poll for new players every 3 seconds as backup
+        // Polling for new players
         matchingCheckInterval = setInterval(async () => {
-          if (!isSubscribed || cleanupRef.current) return;
-          
+          if (!isSubscribed || cleanupRef.current || status === 'found') return;
+
           const { data: newQueue, error } = await supabase
             .from('matchmaking_queue')
             .select('*')
@@ -197,8 +179,7 @@ export function MatchmakingView({ onMatch, onCancel, profile }: MatchmakingViewP
             .single();
 
           if (error && error.code !== 'PGRST116') {
-            console.error('Polling error:', error);
-            return;
+            return; // Ignore polling errors silently to avoid console noise
           }
 
           if (newQueue && isSubscribed && !cleanupRef.current) {
@@ -222,49 +203,43 @@ export function MatchmakingView({ onMatch, onCancel, profile }: MatchmakingViewP
                 .eq('id', newQueue.id);
 
               setStatus('found');
-              if (isSubscribed) {
-                onMatch(roomId);
-              }
+              onMatch(roomId);
             }
           }
         }, 3000);
 
-      } catch (err) {
-        console.error('Matchmaking error:', err);
-        if (isSubscribed) {
-          setStatus('error');
-        }
+      } catch (err: any) {
+        console.error('Matchmaking: Unexpected error:', err.message || err);
+        if (isSubscribed) setStatus('error');
       }
     };
 
     joinMatchmaking();
 
     return () => {
+      console.log('Matchmaking: Cleaning up...');
       isSubscribed = false;
       cleanupRef.current = true;
 
-      // Clear polling interval
       if (matchingCheckInterval) {
         clearInterval(matchingCheckInterval);
       }
 
-      // Remove channel subscription
       if (channel) {
         supabase.removeChannel(channel);
       }
 
-      // Clean up queue entry
       if (queueEntryIdRef.current) {
+        const idToDelete = queueEntryIdRef.current;
         (async () => {
           try {
             await supabase
               .from('matchmaking_queue')
               .delete()
-              .eq('id', queueEntryIdRef.current!)
+              .eq('id', idToDelete)
               .eq('status', 'waiting');
-            console.log('Queue entry cleaned up');
           } catch (err) {
-            console.error('Error cleaning up queue entry:', err);
+            console.error('Matchmaking: Cleanup error:', err);
           }
         })();
       }
