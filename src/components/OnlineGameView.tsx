@@ -28,6 +28,7 @@ import {
   Check,
   Loader2,
   Users,
+  RefreshCw,
 } from "lucide-react";
 
 import { getTheme } from "@/lib/themes";
@@ -195,13 +196,28 @@ export function OnlineGameView({ roomId, onBack, profile }: OnlineGameViewProps)
           },
           (payload) => {
             const room = payload.new as any;
+            const serverState = jsonToGameState(room.game_state);
             const updateTime = new Date(room.updated_at).getTime();
 
-            // Always update state to stay in sync with server
-            // This ensures both players see the same game state
-            console.log('Receiving game state update:', updateTime);
-            lastUpdateTimestamp.current = updateTime;
-            setGameState(jsonToGameState(room.game_state));
+            // Only update if there's an actual game state change (different move count)
+            // This preserves local selectedPiece state during piece selection
+            setGameState(currentState => {
+              const serverMoveCount = serverState.moveHistory?.length || 0;
+              const localMoveCount = currentState.moveHistory?.length || 0;
+
+              // If server has more moves, or game phase changed, update fully
+              if (serverMoveCount !== localMoveCount ||
+                serverState.phase !== currentState.phase ||
+                serverState.winner !== currentState.winner) {
+                console.log('Receiving game state update:', updateTime);
+                lastUpdateTimestamp.current = updateTime;
+                return serverState;
+              }
+
+              // Otherwise, keep current state (preserve selectedPiece)
+              return currentState;
+            });
+
             setRoomStatus(room.status);
             setOpponentConnected(room.black_player_id !== null && room.white_player_id !== null);
             setWhiteName(room.white_player_name || 'Guest');
@@ -259,13 +275,31 @@ export function OnlineGameView({ roomId, onBack, profile }: OnlineGameViewProps)
 
         if (room) {
           const bothConnected = room.black_player_id !== null && room.white_player_id !== null;
+
+          // Update connection status
+          setOpponentConnected(bothConnected);
+          setRoomStatus(room.status);
+          setWhiteName(room.white_player_name || 'Guest');
+          setBlackName(room.black_player_name || 'Guest');
+
+          // Only update game state if there's an actual change
           if (bothConnected) {
-            console.log('Polling: Both players connected!');
-            setOpponentConnected(true);
-            setRoomStatus(room.status);
-            setGameState(jsonToGameState(room.game_state));
-            setWhiteName(room.white_player_name || 'Guest');
-            setBlackName(room.black_player_name || 'Guest');
+            const serverState = jsonToGameState(room.game_state);
+            setGameState(currentState => {
+              const serverMoveCount = serverState.moveHistory?.length || 0;
+              const localMoveCount = currentState.moveHistory?.length || 0;
+
+              // If server has more moves, or game phase changed, update fully
+              if (serverMoveCount !== localMoveCount ||
+                serverState.phase !== currentState.phase ||
+                serverState.winner !== currentState.winner) {
+                console.log('Polling: Game state changed');
+                return serverState;
+              }
+
+              // Otherwise, keep current state (preserve selectedPiece)
+              return currentState;
+            });
           }
         }
       }, 2000);
@@ -417,6 +451,45 @@ export function OnlineGameView({ roomId, onBack, profile }: OnlineGameViewProps)
     // Then sync to server (realtime subscription will confirm for both players)
     await updateGameState(newState);
   }, [gameState, isPlayerTurn, opponentConnected, roomId]);
+
+  const handlePlayAgain = useCallback(async () => {
+    // Create a fresh game state
+    const newInitialState = createInitialState();
+
+    // Swap colors for fairness (winner goes second next round)
+    const { data: currentRoom } = await supabase
+      .from('game_rooms')
+      .select('*')
+      .eq('id', roomId)
+      .single();
+
+    if (currentRoom) {
+      // Swap player assignments
+      const { error } = await supabase
+        .from('game_rooms')
+        .update({
+          white_player_id: currentRoom.black_player_id,
+          white_player_name: currentRoom.black_player_name,
+          black_player_id: currentRoom.white_player_id,
+          black_player_name: currentRoom.white_player_name,
+          game_state: gameStateToJSON(newInitialState),
+          status: 'playing'
+        })
+        .eq('id', roomId);
+
+      if (!error) {
+        // Update local state
+        setGameState(newInitialState);
+        // Swap our color
+        setPlayerColor(prev => prev === 'white' ? 'black' : 'white');
+        // Swap displayed names
+        setWhiteName(currentRoom.black_player_name || 'Guest');
+        setBlackName(currentRoom.white_player_name || 'Guest');
+        // Reset stats updated flag for new game
+        statsUpdated.current = false;
+      }
+    }
+  }, [roomId]);
 
   const copyRoomCode = () => {
     navigator.clipboard.writeText(roomId);
@@ -575,13 +648,22 @@ export function OnlineGameView({ roomId, onBack, profile }: OnlineGameViewProps)
               </div>
 
               {gameState.phase === 'gameOver' && (
-                <div className="mt-6">
+                <div className="mt-6 space-y-3">
+                  <Button
+                    onClick={handlePlayAgain}
+                    className="w-full h-12 font-bold"
+                    style={{ backgroundColor: theme.accentColor, color: '#fff' }}
+                  >
+                    <RefreshCw className="w-5 h-5 mr-2" />
+                    Play Again
+                  </Button>
                   <Button
                     variant="outline"
                     onClick={onBack}
                     className="w-full h-12"
                     style={{ borderColor: theme.lineColor + '20', color: theme.textColor }}
                   >
+                    <Home className="w-5 h-5 mr-2" />
                     Back to Menu
                   </Button>
                 </div>
