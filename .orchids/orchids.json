@@ -1,7 +1,0 @@
-{
-  "projectId": "2bfddbe3-1419-4926-a363-34740d699c24",
-  "createdAt": 1769174615051,
-  "startupCommands": [
-    "cd nine-men-s-morris-online && npm install && npm run dev"
-  ]
-}
