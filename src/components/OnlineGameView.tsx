@@ -84,7 +84,6 @@ export function OnlineGameView({ roomId, onBack, profile }: OnlineGameViewProps)
   const [copied, setCopied] = useState(false);
   const statsUpdated = useRef(false);
   const lastUpdateTimestamp = useRef<number>(0);
-  const isUpdatingRef = useRef(false);
 
   useEffect(() => {
     const initRoom = async () => {
@@ -174,50 +173,91 @@ export function OnlineGameView({ roomId, onBack, profile }: OnlineGameViewProps)
   }, [roomId, playerId, playerName]);
 
   useEffect(() => {
-    const channel = supabase
-      .channel(`room:${roomId}`, {
-        config: {
-          broadcast: { self: false }, // Don't receive our own updates
-          presence: { key: playerId },
-        },
-      })
-      .on(
-        'postgres_changes',
-        {
-          event: 'UPDATE',
-          schema: 'public',
-          table: 'game_rooms',
-          filter: `id=eq.${roomId}`
-        },
-        (payload) => {
-          const room = payload.new as any;
-          const updateTime = new Date(room.updated_at).getTime();
+    let channel: ReturnType<typeof supabase.channel> | null = null;
 
-          // Only update if this is a newer change and we're not currently updating
-          if (updateTime > lastUpdateTimestamp.current && !isUpdatingRef.current) {
+    const setupSubscription = async () => {
+      // Subscribe to game room changes with improved real-time handling
+      channel = supabase
+        .channel(`room:${roomId}`, {
+          config: {
+            broadcast: { self: false }, // Don't receive our own updates
+            presence: { key: playerId },
+          },
+        })
+        .on(
+          'postgres_changes',
+          {
+            event: 'UPDATE',
+            schema: 'public',
+            table: 'game_rooms',
+            filter: `id=eq.${roomId}`
+          },
+          (payload) => {
+            const room = payload.new as any;
+            const updateTime = new Date(room.updated_at).getTime();
+
+            // Update immediately without timestamp checking to avoid lag
+            // The database handles conflict resolution
             console.log('Receiving game state update from opponent');
             lastUpdateTimestamp.current = updateTime;
             setGameState(jsonToGameState(room.game_state));
             setRoomStatus(room.status);
-            setOpponentConnected(room.black_player_id !== null);
+            setOpponentConnected(room.black_player_id !== null && room.white_player_id !== null);
             setWhiteName(room.white_player_name || 'Guest');
             setBlackName(room.black_player_name || 'Guest');
           }
-        }
-      )
-      .subscribe((status) => {
-        if (status === 'SUBSCRIBED') {
-          console.log('Game room channel subscribed successfully');
-        } else if (status === 'CHANNEL_ERROR') {
-          console.error('Game room channel error');
-        }
-      });
+        )
+        .on(
+          'presence',
+          { event: 'sync' },
+          () => {
+            const state = channel?.presenceState() || {};
+            const presenceCount = Object.keys(state).length;
+            console.log('Presence sync:', presenceCount, 'users connected');
+            if (presenceCount >= 2) {
+              setOpponentConnected(true);
+            }
+          }
+        )
+        .on(
+          'presence',
+          { event: 'leave' },
+          (payload) => {
+            console.log('User left:', payload.key);
+          }
+        )
+        .subscribe(async (status) => {
+          if (status === 'SUBSCRIBED') {
+            console.log('Game room channel subscribed successfully');
+            // Send presence update to let opponent know we're connected
+            await channel?.track({
+              user_id: playerId,
+              user_name: playerName,
+              status: 'connected'
+            });
+          } else if (status === 'CHANNEL_ERROR' || status === 'CLOSED') {
+            console.error('Game room channel error/closed:', status);
+            // Attempt to reconnect after delay
+            setTimeout(() => {
+              console.log('Attempting to reconnect to game room');
+              if (channel) {
+                supabase.removeChannel(channel);
+              }
+              setupSubscription();
+            }, 3000);
+          }
+        });
+    };
+
+    setupSubscription();
 
     return () => {
       console.log('Unsubscribing from game room channel');
-      supabase.removeChannel(channel);
+      if (channel) {
+        supabase.removeChannel(channel);
+      }
     };
-  }, [roomId, playerId]);
+  }, [roomId, playerId, playerName]);
 
   useEffect(() => {
     if (gameState.phase === 'gameOver' && !statsUpdated.current && profile) {
@@ -242,42 +282,66 @@ export function OnlineGameView({ roomId, onBack, profile }: OnlineGameViewProps)
   }, [gameState.phase, gameState.winner, playerColor, profile]);
 
   const updateGameState = async (newState: GameState) => {
-    isUpdatingRef.current = true;
+    // Don't use a blocking flag - let updates queue naturally
     const updateTime = Date.now();
     lastUpdateTimestamp.current = updateTime;
 
     try {
-      const { error } = await supabase
-        .from('game_rooms')
-        .update({
-          game_state: gameStateToJSON(newState),
-          status: newState.phase === 'gameOver' ? 'finished' : 'playing',
-          updated_at: new Date(updateTime).toISOString()
-        })
-        .eq('id', roomId);
+      // Update immediately with retry logic
+      let retryCount = 0;
+      const maxRetries = 3;
 
-      if (error) {
-        console.error('Error updating game state:', error);
-        // Revert optimistic update on error
-        const { data: currentRoom } = await supabase
-          .from('game_rooms')
-          .select('*')
-          .eq('id', roomId)
-          .single();
+      const attemptUpdate = async (): Promise<boolean> => {
+        try {
+          const { error } = await supabase
+            .from('game_rooms')
+            .update({
+              game_state: gameStateToJSON(newState),
+              status: newState.phase === 'gameOver' ? 'finished' : 'playing',
+              updated_at: new Date(updateTime).toISOString()
+            })
+            .eq('id', roomId);
 
-        if (currentRoom) {
-          setGameState(jsonToGameState(currentRoom.game_state));
+          if (error) {
+            console.error('Error updating game state:', error);
+            if (retryCount < maxRetries) {
+              retryCount++;
+              console.log(`Retrying update (${retryCount}/${maxRetries})...`);
+              // Wait before retry with exponential backoff
+              await new Promise(resolve => setTimeout(resolve, 100 * retryCount));
+              return attemptUpdate();
+            }
+            
+            // After max retries, try to recover the state
+            const { data: currentRoom } = await supabase
+              .from('game_rooms')
+              .select('*')
+              .eq('id', roomId)
+              .single();
+
+            if (currentRoom) {
+              console.log('Recovering game state from server');
+              setGameState(jsonToGameState(currentRoom.game_state));
+            }
+            return false;
+          }
+
+          console.log('Game state updated successfully');
+          return true;
+        } catch (err) {
+          console.error('Exception updating game state:', err);
+          if (retryCount < maxRetries) {
+            retryCount++;
+            await new Promise(resolve => setTimeout(resolve, 100 * retryCount));
+            return attemptUpdate();
+          }
+          return false;
         }
-      } else {
-        console.log('Game state updated successfully');
-      }
+      };
+
+      await attemptUpdate();
     } catch (err) {
-      console.error('Exception updating game state:', err);
-    } finally {
-      // Allow receiving updates again after a short delay
-      setTimeout(() => {
-        isUpdatingRef.current = false;
-      }, 100);
+      console.error('Unexpected error in updateGameState:', err);
     }
   };
 

@@ -6,9 +6,9 @@ import { supabase } from "@/lib/supabase";
 import { createInitialState } from "@/lib/morris-game";
 import { Button } from "@/components/ui/button";
 import { Profile } from "@/hooks/use-profile";
-import { 
-  Loader2, 
-  Users, 
+import {
+  Loader2,
+  Users,
   X,
   Zap,
 } from "lucide-react";
@@ -33,6 +33,7 @@ export function MatchmakingView({ onMatch, onCancel, profile }: MatchmakingViewP
   const [queueId] = useState(() => Math.random().toString(36).substring(2, 10).toUpperCase());
   const [searchTime, setSearchTime] = useState(0);
   const cleanupRef = useRef(false);
+  const queueEntryIdRef = useRef<string | null>(null);
 
   useEffect(() => {
     const timer = setInterval(() => {
@@ -43,10 +44,13 @@ export function MatchmakingView({ onMatch, onCancel, profile }: MatchmakingViewP
 
   useEffect(() => {
     let channel: ReturnType<typeof supabase.channel> | null = null;
+    let isSubscribed = true;
+    let matchingCheckInterval: NodeJS.Timeout | null = null;
 
     const joinMatchmaking = async () => {
       try {
-        const { data: existingQueue } = await supabase
+        // Check for existing waiting players
+        const { data: existingQueue, error: queueFetchError } = await supabase
           .from('matchmaking_queue')
           .select('*')
           .eq('status', 'waiting')
@@ -55,11 +59,21 @@ export function MatchmakingView({ onMatch, onCancel, profile }: MatchmakingViewP
           .limit(1)
           .single();
 
-        if (existingQueue && !cleanupRef.current) {
+        // PGRST116 means "no rows returned" which is expected when queue is empty
+        if (queueFetchError && queueFetchError.code !== 'PGRST116') {
+          console.error('Error checking matchmaking queue:', queueFetchError);
+          if (isSubscribed) {
+            setStatus('error');
+          }
+          return;
+        }
+
+        if (existingQueue && isSubscribed && !cleanupRef.current) {
           const roomId = `game_${Date.now()}_${Math.random().toString(36).substring(2, 8)}`;
           const initialState = createInitialState();
 
-          await supabase.from('game_rooms').insert({
+          // Create game room
+          const { error: roomError } = await supabase.from('game_rooms').insert({
             id: roomId,
             white_player_id: existingQueue.player_id,
             white_player_name: existingQueue.player_name,
@@ -69,17 +83,39 @@ export function MatchmakingView({ onMatch, onCancel, profile }: MatchmakingViewP
             status: 'playing',
           });
 
-          await supabase
+          if (roomError) {
+            console.error('Error creating game room:', roomError);
+            if (isSubscribed) {
+              setStatus('error');
+            }
+            return;
+          }
+
+          // Update the matched queue entry
+          const { error: updateError } = await supabase
             .from('matchmaking_queue')
             .update({ status: 'matched', room_id: roomId })
             .eq('id', existingQueue.id);
 
-          setStatus('found');
-          setTimeout(() => onMatch(roomId), 1000);
+          if (updateError) {
+            console.error('Error updating queue entry:', updateError);
+            if (isSubscribed) {
+              setStatus('error');
+            }
+            return;
+          }
+
+          if (isSubscribed) {
+            setStatus('found');
+            if (isSubscribed) {
+              onMatch(roomId);
+            }
+          }
           return;
         }
 
-        const { data: queueEntry } = await supabase
+        // Create our queue entry
+        const { data: queueEntry, error: queueError } = await supabase
           .from('matchmaking_queue')
           .insert({
             player_id: playerId,
@@ -89,13 +125,25 @@ export function MatchmakingView({ onMatch, onCancel, profile }: MatchmakingViewP
           .select()
           .single();
 
-        if (!queueEntry) {
-          setStatus('error');
+        if (queueError || !queueEntry) {
+          console.error('Error creating queue entry:', queueError);
+          if (isSubscribed) {
+            setStatus('error');
+          }
           return;
         }
 
+        // Store the queue entry ID
+        queueEntryIdRef.current = queueEntry.id;
+
+        // Subscribe to changes on our queue entry with better error handling
         channel = supabase
-          .channel(`matchmaking:${queueEntry.id}`)
+          .channel(`matchmaking:${queueEntry.id}`, {
+            config: {
+              broadcast: { self: true },
+              presence: { key: playerId },
+            },
+          })
           .on(
             'postgres_changes',
             {
@@ -105,44 +153,142 @@ export function MatchmakingView({ onMatch, onCancel, profile }: MatchmakingViewP
               filter: `id=eq.${queueEntry.id}`,
             },
             (payload) => {
+              if (!isSubscribed || cleanupRef.current) return;
               const updated = payload.new as { status: string; room_id: string | null };
-              if (updated.status === 'matched' && updated.room_id) {
+              if (updated.status === 'matched' && updated.room_id && isSubscribed) {
                 setStatus('found');
-                setTimeout(() => onMatch(updated.room_id!), 1000);
+                if (isSubscribed) {
+                  onMatch(updated.room_id!);
+                }
               }
             }
           )
-          .subscribe();
+          .subscribe(async (status) => {
+            if (!isSubscribed) return;
+            if (status === 'SUBSCRIBED') {
+              console.log('Matchmaking channel subscribed successfully');
+            } else if (status === 'CHANNEL_ERROR' || status === 'CLOSED') {
+              console.error('Matchmaking channel error/closed, attempting reconnect');
+              if (isSubscribed && !cleanupRef.current) {
+                // Wait a bit before reconnecting
+                await new Promise(resolve => setTimeout(resolve, 2000));
+                if (isSubscribed && !cleanupRef.current) {
+                  // Recreate channel
+                  if (channel) {
+                    supabase.removeChannel(channel);
+                  }
+                  joinMatchmaking();
+                }
+              }
+            }
+          });
+
+        // Also poll for new players every 3 seconds as backup
+        matchingCheckInterval = setInterval(async () => {
+          if (!isSubscribed || cleanupRef.current) return;
+          
+          const { data: newQueue, error } = await supabase
+            .from('matchmaking_queue')
+            .select('*')
+            .eq('status', 'waiting')
+            .neq('player_id', playerId)
+            .order('created_at', { ascending: true })
+            .limit(1)
+            .single();
+
+          if (error && error.code !== 'PGRST116') {
+            console.error('Polling error:', error);
+            return;
+          }
+
+          if (newQueue && isSubscribed && !cleanupRef.current) {
+            const roomId = `game_${Date.now()}_${Math.random().toString(36).substring(2, 8)}`;
+            const initialState = createInitialState();
+
+            const { error: roomError } = await supabase.from('game_rooms').insert({
+              id: roomId,
+              white_player_id: newQueue.player_id,
+              white_player_name: newQueue.player_name,
+              black_player_id: playerId,
+              black_player_name: profile?.name || 'Guest',
+              game_state: initialState,
+              status: 'playing',
+            });
+
+            if (!roomError && isSubscribed) {
+              await supabase
+                .from('matchmaking_queue')
+                .update({ status: 'matched', room_id: roomId })
+                .eq('id', newQueue.id);
+
+              setStatus('found');
+              if (isSubscribed) {
+                onMatch(roomId);
+              }
+            }
+          }
+        }, 3000);
 
       } catch (err) {
         console.error('Matchmaking error:', err);
-        setStatus('error');
+        if (isSubscribed) {
+          setStatus('error');
+        }
       }
     };
 
     joinMatchmaking();
 
     return () => {
+      isSubscribed = false;
       cleanupRef.current = true;
+
+      // Clear polling interval
+      if (matchingCheckInterval) {
+        clearInterval(matchingCheckInterval);
+      }
+
+      // Remove channel subscription
       if (channel) {
         supabase.removeChannel(channel);
       }
-      supabase
-        .from('matchmaking_queue')
-        .delete()
-        .eq('player_id', playerId)
-        .eq('status', 'waiting')
-        .then(() => {});
+
+      // Clean up queue entry
+      if (queueEntryIdRef.current) {
+        (async () => {
+          try {
+            await supabase
+              .from('matchmaking_queue')
+              .delete()
+              .eq('id', queueEntryIdRef.current!)
+              .eq('status', 'waiting');
+            console.log('Queue entry cleaned up');
+          } catch (err) {
+            console.error('Error cleaning up queue entry:', err);
+          }
+        })();
+      }
     };
   }, [playerId, profile?.name, onMatch]);
 
   const handleCancel = async () => {
     cleanupRef.current = true;
-    await supabase
-      .from('matchmaking_queue')
-      .delete()
-      .eq('player_id', playerId)
-      .eq('status', 'waiting');
+
+    // Delete using the specific queue entry ID if available
+    if (queueEntryIdRef.current) {
+      await supabase
+        .from('matchmaking_queue')
+        .delete()
+        .eq('id', queueEntryIdRef.current);
+    } else {
+      // Fallback to player_id based deletion
+      await supabase
+        .from('matchmaking_queue')
+        .delete()
+        .eq('player_id', playerId)
+        .eq('status', 'waiting');
+    }
+
     onCancel();
   };
 
@@ -175,10 +321,10 @@ export function MatchmakingView({ onMatch, onCancel, profile }: MatchmakingViewP
                 </div>
               </div>
             </div>
-            
+
             <h2 className="text-2xl font-bold mb-2" style={{ color: theme.isDark ? '#fff' : theme.headingColor }}>Finding Opponent</h2>
             <p className="mb-4" style={{ color: theme.isDark ? 'rgba(255,255,255,0.7)' : theme.textColor }}>Searching for a player to match with...</p>
-            
+
             <div className="rounded-lg px-4 py-3 mb-6 shadow-inner" style={{ backgroundColor: theme.appBackground }}>
               <div className="flex items-center justify-center gap-2" style={{ color: theme.isDark ? '#fff' : theme.textColor }}>
                 <Loader2 className="w-5 h-5 animate-spin" style={{ color: theme.accentColor }} />
@@ -208,7 +354,7 @@ export function MatchmakingView({ onMatch, onCancel, profile }: MatchmakingViewP
             >
               <Zap className="w-10 h-10 text-white" />
             </motion.div>
-            
+
             <h2 className="text-2xl font-bold mb-2" style={{ color: theme.isDark ? '#fff' : theme.headingColor }}>Match Found!</h2>
             <p style={{ color: theme.isDark ? 'rgba(255,255,255,0.7)' : theme.textColor }}>Starting game...</p>
           </>
@@ -219,10 +365,10 @@ export function MatchmakingView({ onMatch, onCancel, profile }: MatchmakingViewP
             <div className="w-20 h-20 bg-red-600 rounded-full flex items-center justify-center mx-auto mb-6 shadow-lg">
               <X className="w-10 h-10 text-white" />
             </div>
-            
+
             <h2 className="text-2xl font-bold mb-2" style={{ color: theme.isDark ? '#fff' : theme.headingColor }}>Connection Error</h2>
             <p className="mb-4" style={{ color: theme.isDark ? 'rgba(255,255,255,0.7)' : theme.textColor }}>Failed to connect to matchmaking service.</p>
-            
+
             <Button
               onClick={onCancel}
               variant="outline"
