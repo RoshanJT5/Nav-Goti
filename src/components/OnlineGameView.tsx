@@ -18,8 +18,8 @@ import {
 import { supabase, GameStateJSON } from "@/lib/supabase";
 import { Profile } from "@/hooks/use-profile";
 import { Button } from "@/components/ui/button";
-import { 
-  RotateCcw, 
+import {
+  RotateCcw,
   ChevronLeft,
   ChevronRight,
   Home,
@@ -83,6 +83,8 @@ export function OnlineGameView({ roomId, onBack, profile }: OnlineGameViewProps)
   const [blackName, setBlackName] = useState('Waiting...');
   const [copied, setCopied] = useState(false);
   const statsUpdated = useRef(false);
+  const lastUpdateTimestamp = useRef<number>(0);
+  const isUpdatingRef = useRef(false);
 
   useEffect(() => {
     const initRoom = async () => {
@@ -100,20 +102,20 @@ export function OnlineGameView({ roomId, onBack, profile }: OnlineGameViewProps)
 
       if (existingRoom) {
         const room = existingRoom as any;
-        
+
         if (room.white_player_id === null) {
           await supabase
             .from('game_rooms')
-            .update({ 
+            .update({
               white_player_id: playerId,
-              white_player_name: playerName 
+              white_player_name: playerName
             })
             .eq('id', roomId);
           setPlayerColor('white');
         } else if (room.black_player_id === null && room.white_player_id !== playerId) {
           await supabase
             .from('game_rooms')
-            .update({ 
+            .update({
               black_player_id: playerId,
               black_player_name: playerName,
               status: 'playing'
@@ -173,7 +175,12 @@ export function OnlineGameView({ roomId, onBack, profile }: OnlineGameViewProps)
 
   useEffect(() => {
     const channel = supabase
-      .channel(`room:${roomId}`)
+      .channel(`room:${roomId}`, {
+        config: {
+          broadcast: { self: false }, // Don't receive our own updates
+          presence: { key: playerId },
+        },
+      })
       .on(
         'postgres_changes',
         {
@@ -184,19 +191,33 @@ export function OnlineGameView({ roomId, onBack, profile }: OnlineGameViewProps)
         },
         (payload) => {
           const room = payload.new as any;
-          setGameState(jsonToGameState(room.game_state));
-          setRoomStatus(room.status);
-          setOpponentConnected(room.black_player_id !== null);
-          setWhiteName(room.white_player_name || 'Guest');
-          setBlackName(room.black_player_name || 'Guest');
+          const updateTime = new Date(room.updated_at).getTime();
+
+          // Only update if this is a newer change and we're not currently updating
+          if (updateTime > lastUpdateTimestamp.current && !isUpdatingRef.current) {
+            console.log('Receiving game state update from opponent');
+            lastUpdateTimestamp.current = updateTime;
+            setGameState(jsonToGameState(room.game_state));
+            setRoomStatus(room.status);
+            setOpponentConnected(room.black_player_id !== null);
+            setWhiteName(room.white_player_name || 'Guest');
+            setBlackName(room.black_player_name || 'Guest');
+          }
         }
       )
-      .subscribe();
+      .subscribe((status) => {
+        if (status === 'SUBSCRIBED') {
+          console.log('Game room channel subscribed successfully');
+        } else if (status === 'CHANNEL_ERROR') {
+          console.error('Game room channel error');
+        }
+      });
 
     return () => {
+      console.log('Unsubscribing from game room channel');
       supabase.removeChannel(channel);
     };
-  }, [roomId]);
+  }, [roomId, playerId]);
 
   useEffect(() => {
     if (gameState.phase === 'gameOver' && !statsUpdated.current && profile) {
@@ -204,7 +225,7 @@ export function OnlineGameView({ roomId, onBack, profile }: OnlineGameViewProps)
         statsUpdated.current = true;
         const isWinner = gameState.winner === playerColor;
         const updates: any = {};
-        
+
         if (isWinner) {
           updates.wins = (profile.wins || 0) + 1;
         } else {
@@ -221,17 +242,42 @@ export function OnlineGameView({ roomId, onBack, profile }: OnlineGameViewProps)
   }, [gameState.phase, gameState.winner, playerColor, profile]);
 
   const updateGameState = async (newState: GameState) => {
-    const { error } = await supabase
-      .from('game_rooms')
-      .update({
-        game_state: gameStateToJSON(newState),
-        status: newState.phase === 'gameOver' ? 'finished' : 'playing',
-        updated_at: new Date().toISOString()
-      })
-      .eq('id', roomId);
+    isUpdatingRef.current = true;
+    const updateTime = Date.now();
+    lastUpdateTimestamp.current = updateTime;
 
-    if (error) {
-      console.error('Error updating game state:', error);
+    try {
+      const { error } = await supabase
+        .from('game_rooms')
+        .update({
+          game_state: gameStateToJSON(newState),
+          status: newState.phase === 'gameOver' ? 'finished' : 'playing',
+          updated_at: new Date(updateTime).toISOString()
+        })
+        .eq('id', roomId);
+
+      if (error) {
+        console.error('Error updating game state:', error);
+        // Revert optimistic update on error
+        const { data: currentRoom } = await supabase
+          .from('game_rooms')
+          .select('*')
+          .eq('id', roomId)
+          .single();
+
+        if (currentRoom) {
+          setGameState(jsonToGameState(currentRoom.game_state));
+        }
+      } else {
+        console.log('Game state updated successfully');
+      }
+    } catch (err) {
+      console.error('Exception updating game state:', err);
+    } finally {
+      // Allow receiving updates again after a short delay
+      setTimeout(() => {
+        isUpdatingRef.current = false;
+      }, 100);
     }
   };
 
@@ -252,28 +298,34 @@ export function OnlineGameView({ roomId, onBack, profile }: OnlineGameViewProps)
       if (gameState.selectedPiece === null) {
         newState = selectPiece(gameState, position);
         if (newState === gameState) return;
+        // Local UI update only - don't sync to server
         setGameState(newState);
         return;
       } else {
         if (position === gameState.selectedPiece) {
+          // Deselect - local UI update only
           setGameState({ ...gameState, selectedPiece: null });
           return;
         }
-        
+
         if (gameState.board[position] === gameState.currentPlayer) {
           const validMoves = getValidMoves(gameState, position);
           if (validMoves.length > 0) {
+            // Select different piece - local UI update only
             setGameState({ ...gameState, selectedPiece: position });
             return;
           }
         }
-        
+
         newState = movePiece(gameState, gameState.selectedPiece, position);
         if (newState === gameState) return;
       }
     }
 
+    // Optimistic update: Update local state immediately for responsive UI
     setGameState(newState);
+
+    // Then sync to server (this will trigger opponent's real-time update)
     await updateGameState(newState);
   }, [gameState, isPlayerTurn, opponentConnected, roomId]);
 
@@ -302,36 +354,36 @@ export function OnlineGameView({ roomId, onBack, profile }: OnlineGameViewProps)
     <div className="min-h-screen flex flex-col transition-colors duration-500" style={{ backgroundColor: theme.appBackground }}>
       <header className="border-b px-4 py-2" style={{ backgroundColor: theme.headerBg, borderColor: theme.lineColor + '20' }}>
         <div className="max-w-7xl mx-auto flex items-center justify-between">
-            <button 
-              onClick={onBack}
-              className="flex items-center gap-2 hover:opacity-80 transition-colors"
-              style={{ color: theme.textColor + '80' }}
-            >
-              <Home className="w-5 h-5" />
-              <span className="font-semibold">Mill Game</span>
-            </button>
-            <div className="flex items-center gap-4">
+          <button
+            onClick={onBack}
+            className="flex items-center gap-2 hover:opacity-80 transition-colors"
+            style={{ color: theme.textColor + '80' }}
+          >
+            <Home className="w-5 h-5" />
+            <span className="font-semibold">Mill Game</span>
+          </button>
+          <div className="flex items-center gap-4">
+            <div className="flex items-center gap-2">
+              <span className="text-sm opacity-60" style={{ color: theme.textColor }}>Room:</span>
+              <code className="px-2 py-1 rounded text-sm font-mono" style={{ backgroundColor: theme.cardBg, color: theme.textColor }}>
+                {roomId}
+              </code>
+              <Button
+                size="icon"
+                variant="ghost"
+                onClick={copyRoomCode}
+                className="h-8 w-8"
+                style={{ color: theme.textColor + '60' }}
+              >
+                {copied ? <Check className="w-4 h-4 text-green-500" /> : <Copy className="w-4 h-4" />}
+              </Button>
+            </div>
+            {playerColor && (
               <div className="flex items-center gap-2">
-                <span className="text-sm opacity-60" style={{ color: theme.textColor }}>Room:</span>
-                <code className="px-2 py-1 rounded text-sm font-mono" style={{ backgroundColor: theme.cardBg, color: theme.textColor }}>
-                  {roomId}
-                </code>
-                <Button
-                  size="icon"
-                  variant="ghost"
-                  onClick={copyRoomCode}
-                  className="h-8 w-8"
-                  style={{ color: theme.textColor + '60' }}
-                >
-                  {copied ? <Check className="w-4 h-4 text-green-500" /> : <Copy className="w-4 h-4" />}
-                </Button>
-              </div>
-              {playerColor && (
-                <div className="flex items-center gap-2">
-                  <span className="text-sm opacity-60" style={{ color: theme.textColor }}>You:</span>
-                <div 
-                  className="w-5 h-5 rounded-full border-2 shadow-sm flex items-center justify-center text-[8px]" 
-                  style={{ 
+                <span className="text-sm opacity-60" style={{ color: theme.textColor }}>You:</span>
+                <div
+                  className="w-5 h-5 rounded-full border-2 shadow-sm flex items-center justify-center text-[8px]"
+                  style={{
                     background: playerColor === 'white' ? theme.whitePiece.bg : theme.blackPiece.bg,
                     borderColor: playerColor === 'white' ? theme.whitePiece.border : theme.blackPiece.border,
                     color: playerColor === 'white' ? theme.whitePiece.color : theme.blackPiece.color
@@ -357,23 +409,23 @@ export function OnlineGameView({ roomId, onBack, profile }: OnlineGameViewProps)
               <div className="w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-4 shadow-lg" style={{ backgroundColor: theme.accentColor }}>
                 <Users className="w-8 h-8 text-white" />
               </div>
-                <h2 className="text-2xl font-bold mb-2" style={{ color: theme.textColor }}>Waiting for Opponent</h2>
-                <p className="opacity-60 mb-4" style={{ color: theme.textColor }}>Share this room code with a friend:</p>
-                <div className="flex items-center justify-center gap-2 mb-6">
-                  <code className="px-6 py-3 rounded-lg text-3xl font-mono shadow-inner" style={{ backgroundColor: theme.appBackground, color: theme.textColor }}>
-                    {roomId}
-                  </code>
-                  <Button
-                    size="icon"
-                    variant="outline"
-                    onClick={copyRoomCode}
-                    className="h-12 w-12"
-                    style={{ borderColor: theme.lineColor + '20' }}
-                  >
-                    {copied ? <Check className="w-6 h-6 text-green-500" /> : <Copy className="w-6 h-6" style={{ color: theme.textColor }} />}
-                  </Button>
-                </div>
-                <div className="flex items-center justify-center gap-3 opacity-60" style={{ color: theme.textColor }}>
+              <h2 className="text-2xl font-bold mb-2" style={{ color: theme.textColor }}>Waiting for Opponent</h2>
+              <p className="opacity-60 mb-4" style={{ color: theme.textColor }}>Share this room code with a friend:</p>
+              <div className="flex items-center justify-center gap-2 mb-6">
+                <code className="px-6 py-3 rounded-lg text-3xl font-mono shadow-inner" style={{ backgroundColor: theme.appBackground, color: theme.textColor }}>
+                  {roomId}
+                </code>
+                <Button
+                  size="icon"
+                  variant="outline"
+                  onClick={copyRoomCode}
+                  className="h-12 w-12"
+                  style={{ borderColor: theme.lineColor + '20' }}
+                >
+                  {copied ? <Check className="w-6 h-6 text-green-500" /> : <Copy className="w-6 h-6" style={{ color: theme.textColor }} />}
+                </Button>
+              </div>
+              <div className="flex items-center justify-center gap-3 opacity-60" style={{ color: theme.textColor }}>
                 <Loader2 className="w-5 h-5 animate-spin" />
                 <span>Waiting for player...</span>
               </div>
@@ -386,7 +438,7 @@ export function OnlineGameView({ roomId, onBack, profile }: OnlineGameViewProps)
                 blackName={blackName}
                 themeId={profile?.theme_id}
               />
-              
+
               <MorrisBoard
                 gameState={gameState}
                 onPositionClick={handlePositionClick}
@@ -399,34 +451,34 @@ export function OnlineGameView({ roomId, onBack, profile }: OnlineGameViewProps)
         </div>
 
         {roomStatus !== 'waiting' && (
-            <div className="w-full max-w-sm lg:w-80">
-              <div className="rounded-xl p-4 shadow-xl border" style={{ backgroundColor: theme.cardBg, borderColor: theme.lineColor + '20' }}>
-                <h3 className="font-semibold mb-4" style={{ color: theme.textColor }}>Game Status</h3>
-                <div 
-                  className="p-4 rounded-xl text-center font-bold text-lg shadow-inner"
-                  style={{ 
-                    backgroundColor: gameState.phase === 'gameOver' 
-                      ? theme.accentColor 
-                      : isPlayerTurn 
-                        ? theme.accentColor + '20' 
-                        : theme.lineColor + '10',
-                    color: gameState.phase === 'gameOver' ? '#fff' : theme.textColor
-                  }}
-                >
-                  {getStatusMessage()}
-                </div>
+          <div className="w-full max-w-sm lg:w-80">
+            <div className="rounded-xl p-4 shadow-xl border" style={{ backgroundColor: theme.cardBg, borderColor: theme.lineColor + '20' }}>
+              <h3 className="font-semibold mb-4" style={{ color: theme.textColor }}>Game Status</h3>
+              <div
+                className="p-4 rounded-xl text-center font-bold text-lg shadow-inner"
+                style={{
+                  backgroundColor: gameState.phase === 'gameOver'
+                    ? theme.accentColor
+                    : isPlayerTurn
+                      ? theme.accentColor + '20'
+                      : theme.lineColor + '10',
+                  color: gameState.phase === 'gameOver' ? '#fff' : theme.textColor
+                }}
+              >
+                {getStatusMessage()}
+              </div>
 
-                <div className="mt-6 space-y-3">
-                  <div className="flex justify-between text-sm">
-                    <span className="opacity-60 font-medium" style={{ color: theme.textColor }}>Phase</span>
-                    <span className="font-bold capitalize" style={{ color: theme.textColor }}>{gameState.phase}</span>
-                  </div>
-                  <div className="flex justify-between text-sm">
-                    <span className="opacity-60 font-medium" style={{ color: theme.textColor }}>Your Color</span>
-                    <span className="font-bold capitalize" style={{ color: theme.textColor }}>{playerColor}</span>
-                  </div>
-                  <div className="flex justify-between text-sm">
-                    <span className="opacity-60 font-medium" style={{ color: theme.textColor }}>Opponent</span>
+              <div className="mt-6 space-y-3">
+                <div className="flex justify-between text-sm">
+                  <span className="opacity-60 font-medium" style={{ color: theme.textColor }}>Phase</span>
+                  <span className="font-bold capitalize" style={{ color: theme.textColor }}>{gameState.phase}</span>
+                </div>
+                <div className="flex justify-between text-sm">
+                  <span className="opacity-60 font-medium" style={{ color: theme.textColor }}>Your Color</span>
+                  <span className="font-bold capitalize" style={{ color: theme.textColor }}>{playerColor}</span>
+                </div>
+                <div className="flex justify-between text-sm">
+                  <span className="opacity-60 font-medium" style={{ color: theme.textColor }}>Opponent</span>
                   <span className="font-bold" style={{ color: opponentConnected ? theme.accentColor : '#e5a02b' }}>
                     {opponentConnected ? 'Connected' : 'Waiting...'}
                   </span>
@@ -435,41 +487,41 @@ export function OnlineGameView({ roomId, onBack, profile }: OnlineGameViewProps)
 
               {gameState.phase === 'gameOver' && (
                 <div className="mt-6">
-                <Button 
-                      variant="outline"
-                      onClick={onBack}
-                      className="w-full h-12"
-                      style={{ borderColor: theme.lineColor + '20', color: theme.textColor }}
-                    >
-                      Back to Menu
-                    </Button>
+                  <Button
+                    variant="outline"
+                    onClick={onBack}
+                    className="w-full h-12"
+                    style={{ borderColor: theme.lineColor + '20', color: theme.textColor }}
+                  >
+                    Back to Menu
+                  </Button>
                 </div>
               )}
             </div>
 
             <div className="rounded-xl p-4 mt-4 shadow-lg border" style={{ backgroundColor: theme.cardBg, borderColor: theme.lineColor + '20' }}>
-              <h3 className="font-semibold mb-4" style={{ color: theme.lineColor }}>Players</h3>
+              <h3 className="font-semibold mb-4" style={{ color: theme.textColor }}>Players</h3>
               <div className="space-y-4">
                 <div className="flex items-center gap-3">
-                  <div 
-                    className="w-8 h-8 rounded-full border shadow-sm flex items-center justify-center text-[10px]" 
+                  <div
+                    className="w-8 h-8 rounded-full border shadow-sm flex items-center justify-center text-[10px]"
                     style={{ background: theme.whitePiece.bg, borderColor: theme.whitePiece.border, color: theme.whitePiece.color }}
                   >
                     {theme.whitePiece.content}
                   </div>
-                  <span className="text-sm font-medium flex-1 truncate" style={{ color: theme.lineColor }}>{whiteName}</span>
+                  <span className="text-sm font-medium flex-1 truncate" style={{ color: theme.textColor }}>{whiteName}</span>
                   {playerColor === 'white' && (
                     <span className="text-[10px] text-white px-2 py-0.5 rounded-full font-bold shadow-sm" style={{ backgroundColor: theme.accentColor }}>You</span>
                   )}
                 </div>
                 <div className="flex items-center gap-3">
-                  <div 
-                    className="w-8 h-8 rounded-full border shadow-sm flex items-center justify-center text-[10px]" 
+                  <div
+                    className="w-8 h-8 rounded-full border shadow-sm flex items-center justify-center text-[10px]"
                     style={{ background: theme.blackPiece.bg, borderColor: theme.blackPiece.border, color: theme.blackPiece.color }}
                   >
                     {theme.blackPiece.content}
                   </div>
-                  <span className="text-sm font-medium flex-1 truncate" style={{ color: theme.lineColor }}>{blackName}</span>
+                  <span className="text-sm font-medium flex-1 truncate" style={{ color: theme.textColor }}>{blackName}</span>
                   {playerColor === 'black' && (
                     <span className="text-[10px] text-white px-2 py-0.5 rounded-full font-bold shadow-sm" style={{ backgroundColor: theme.accentColor }}>You</span>
                   )}
@@ -477,17 +529,17 @@ export function OnlineGameView({ roomId, onBack, profile }: OnlineGameViewProps)
               </div>
             </div>
           </div>
-          )}
-        </main>
-        {roomStatus !== 'loading' && roomStatus !== 'error' && (
-          <GameChat 
-            roomId={roomId} 
-            playerId={playerId} 
-            playerName={playerName} 
-            themeId={profile?.theme_id}
-          />
         )}
-      </div>
-    );
-  }
+      </main>
+      {roomStatus !== 'loading' && roomStatus !== 'error' && (
+        <GameChat
+          roomId={roomId}
+          playerId={playerId}
+          playerName={playerName}
+          themeId={profile?.theme_id}
+        />
+      )}
+    </div>
+  );
+}
 
