@@ -145,7 +145,7 @@ export function GameChat({ roomId, playerId, playerName, themeId = 'classic' }: 
     <div className="fixed bottom-4 right-4 z-50 flex flex-col items-end">
       {isOpen && (
         <div
-          className="mb-4 w-80 h-[450px] rounded-2xl shadow-2xl flex flex-col border overflow-hidden animate-in slide-in-from-bottom-4 duration-300"
+          className="mb-4 w-full max-w-[calc(100vw-2rem)] sm:w-80 h-[450px] rounded-2xl shadow-2xl flex flex-col border overflow-hidden animate-in slide-in-from-bottom-4 duration-300"
           style={{ backgroundColor: theme.cardBg, borderColor: theme.lineColor + '20' }}
         >
           {/* Header */}
@@ -154,8 +154,28 @@ export function GameChat({ roomId, playerId, playerName, themeId = 'classic' }: 
             style={{ backgroundColor: theme.headerBg, borderColor: theme.lineColor + '10' }}
           >
             <div className="flex items-center gap-2">
-              <MessageCircle className="w-5 h-5" style={{ color: theme.accentColor }} />
-              <span className="font-bold" style={{ color: theme.lineColor }}>Game Chat</span>
+              <MessageCircle className="w-5 h-5" style={{ color: theme.chatGradient ? undefined : theme.accentColor, stroke: theme.chatGradient ? 'url(#chat-grad-stroke)' : undefined }} />
+              <span
+                className="font-bold"
+                style={theme.chatGradient ? {
+                  backgroundImage: theme.chatGradient,
+                  WebkitBackgroundClip: 'text',
+                  WebkitTextFillColor: 'transparent'
+                } : { color: theme.lineColor }}
+              >
+                Game Chat
+              </span>
+              {theme.chatGradient && (
+                <svg width="0" height="0" className="absolute">
+                  <defs>
+                    <linearGradient id="chat-grad-stroke" x1="0%" y1="0%" x2="100%" y2="0%">
+                      <stop offset="0%" stopColor="#22c55e" />
+                      <stop offset="50%" stopColor="#3b82f6" />
+                      <stop offset="100%" stopColor="#ef4444" />
+                    </linearGradient>
+                  </defs>
+                </svg>
+              )}
             </div>
             <button
               onClick={toggleChat}
@@ -184,7 +204,9 @@ export function GameChat({ roomId, playerId, playerName, themeId = 'classic' }: 
                       : 'rounded-tl-none'
                       }`}
                     style={{
-                      backgroundColor: msg.player_id === playerId ? theme.accentColor : theme.lineColor + '10',
+                      background: msg.player_id === playerId
+                        ? (theme.chatGradient || theme.accentColor)
+                        : theme.lineColor + '10',
                       color: msg.player_id === playerId ? '#fff' : theme.lineColor
                     }}
                   >
@@ -222,7 +244,7 @@ export function GameChat({ roomId, playerId, playerName, themeId = 'classic' }: 
               type="submit"
               size="icon"
               className="h-10 w-10 shrink-0"
-              style={{ backgroundColor: theme.accentColor }}
+              style={{ background: theme.chatGradient || theme.accentColor }}
             >
               <Send className="w-4 h-4 text-white" />
             </Button>
@@ -233,7 +255,7 @@ export function GameChat({ roomId, playerId, playerName, themeId = 'classic' }: 
       <Button
         onClick={toggleChat}
         className="w-14 h-14 rounded-full shadow-2xl relative transition-transform hover:scale-105 active:scale-95 animate-bounce-slow"
-        style={{ backgroundColor: theme.accentColor }}
+        style={{ background: theme.chatGradient || theme.accentColor }}
         aria-label="Open chat"
       >
         <MessageCircle className="w-6 h-6 text-white" />

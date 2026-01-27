@@ -72,6 +72,10 @@ function jsonToGameState(json: GameStateJSON): GameState {
   };
 }
 
+// Constants for heartbeat-based disconnect detection
+const HEARTBEAT_INTERVAL = 5000; // Send heartbeat every 5 seconds
+const DISCONNECT_TIMEOUT = 30000; // Consider opponent disconnected after 30 seconds of no heartbeat
+
 export function OnlineGameView({ roomId, onBack, profile }: OnlineGameViewProps) {
   const theme = getTheme(profile?.theme_id);
   const [gameState, setGameState] = useState<GameState>(createInitialState());
@@ -80,11 +84,15 @@ export function OnlineGameView({ roomId, onBack, profile }: OnlineGameViewProps)
   const playerName = profile?.name || "Guest";
   const [roomStatus, setRoomStatus] = useState<'loading' | 'waiting' | 'playing' | 'finished' | 'error'>('loading');
   const [opponentConnected, setOpponentConnected] = useState(false);
+  const [opponentDisconnected, setOpponentDisconnected] = useState(false);
   const [whiteName, setWhiteName] = useState('Waiting...');
   const [blackName, setBlackName] = useState('Waiting...');
   const [copied, setCopied] = useState(false);
   const statsUpdated = useRef(false);
   const lastUpdateTimestamp = useRef<number>(0);
+  const gameStartedRef = useRef(false);
+  const lastOpponentPingRef = useRef<number>(Date.now());
+  const forfeitHandled = useRef(false);
 
   useEffect(() => {
     const initRoom = async () => {
@@ -103,12 +111,50 @@ export function OnlineGameView({ roomId, onBack, profile }: OnlineGameViewProps)
       if (existingRoom) {
         const room = existingRoom as any;
 
+        // Check if the game was already forfeited
+        if (room.status === 'forfeited' || room.forfeit_winner) {
+          console.log('Game was already forfeited');
+          setGameState(jsonToGameState(room.game_state));
+
+          // Set player color based on stored player IDs
+          if (room.white_player_id === playerId) {
+            setPlayerColor('white');
+          } else if (room.black_player_id === playerId) {
+            setPlayerColor('black');
+          }
+
+          setWhiteName(room.white_player_name || 'Guest');
+          setBlackName(room.black_player_name || 'Guest');
+          setRoomStatus('finished');
+          setOpponentDisconnected(true);
+          forfeitHandled.current = true;
+          return;
+        }
+
+        // Check if opponent seems disconnected (their heartbeat is stale)
+        const now = new Date();
+        const opponentLastActive = room.white_player_id === playerId
+          ? room.black_last_active
+          : room.white_last_active;
+
+        if (opponentLastActive && room.status === 'playing') {
+          const lastActiveTime = new Date(opponentLastActive).getTime();
+          const timeSinceActive = now.getTime() - lastActiveTime;
+
+          if (timeSinceActive > DISCONNECT_TIMEOUT) {
+            console.log('Opponent heartbeat stale - checking if they really left');
+            // We'll handle this in the heartbeat check, not here
+            // Just record our own presence for now
+          }
+        }
+
         if (room.white_player_id === null) {
           await supabase
             .from('game_rooms')
             .update({
               white_player_id: playerId,
-              white_player_name: playerName
+              white_player_name: playerName,
+              white_last_active: now.toISOString()
             })
             .eq('id', roomId);
           setPlayerColor('white');
@@ -118,6 +164,7 @@ export function OnlineGameView({ roomId, onBack, profile }: OnlineGameViewProps)
             .update({
               black_player_id: playerId,
               black_player_name: playerName,
+              black_last_active: now.toISOString(),
               status: 'playing'
             })
             .eq('id', roomId);
@@ -125,14 +172,18 @@ export function OnlineGameView({ roomId, onBack, profile }: OnlineGameViewProps)
           setOpponentConnected(true);
         } else if (room.white_player_id === playerId) {
           setPlayerColor('white');
-          if (room.white_player_name !== playerName) {
-            await supabase.from('game_rooms').update({ white_player_name: playerName }).eq('id', roomId);
-          }
+          // Update our heartbeat
+          await supabase.from('game_rooms').update({
+            white_player_name: playerName,
+            white_last_active: now.toISOString()
+          }).eq('id', roomId);
         } else if (room.black_player_id === playerId) {
           setPlayerColor('black');
-          if (room.black_player_name !== playerName) {
-            await supabase.from('game_rooms').update({ black_player_name: playerName }).eq('id', roomId);
-          }
+          // Update our heartbeat
+          await supabase.from('game_rooms').update({
+            black_player_name: playerName,
+            black_last_active: now.toISOString()
+          }).eq('id', roomId);
         } else {
           setRoomStatus('error');
           return;
@@ -142,9 +193,15 @@ export function OnlineGameView({ roomId, onBack, profile }: OnlineGameViewProps)
         if (updatedRoom) {
           setGameState(jsonToGameState(updatedRoom.game_state));
           setRoomStatus(updatedRoom.status);
-          setOpponentConnected(updatedRoom.black_player_id !== null);
+          setOpponentConnected(updatedRoom.black_player_id !== null && updatedRoom.white_player_id !== null);
           setWhiteName(updatedRoom.white_player_name || 'Guest');
           setBlackName(updatedRoom.black_player_name || 'Guest');
+
+          // Mark game as started if restoring a playing game (after refresh)
+          if (updatedRoom.status === 'playing') {
+            gameStartedRef.current = true;
+            console.log('Restored game session - game already started');
+          }
         }
       } else {
         const initialState = createInitialState();
@@ -176,6 +233,7 @@ export function OnlineGameView({ roomId, onBack, profile }: OnlineGameViewProps)
   useEffect(() => {
     let channel: ReturnType<typeof supabase.channel> | null = null;
     let pollingInterval: NodeJS.Timeout | null = null;
+    let isMounted = true; // Flag to prevent actions after unmount
 
     const setupSubscription = async () => {
       // Subscribe to game room changes with improved real-time handling
@@ -222,6 +280,12 @@ export function OnlineGameView({ roomId, onBack, profile }: OnlineGameViewProps)
             setOpponentConnected(room.black_player_id !== null && room.white_player_id !== null);
             setWhiteName(room.white_player_name || 'Guest');
             setBlackName(room.black_player_name || 'Guest');
+
+            // Track when game has started (both players connected)
+            if (room.status === 'playing' && !gameStartedRef.current) {
+              gameStartedRef.current = true;
+              console.log('Game officially started');
+            }
           }
         )
         .on(
@@ -229,10 +293,18 @@ export function OnlineGameView({ roomId, onBack, profile }: OnlineGameViewProps)
           { event: 'sync' },
           () => {
             const state = channel?.presenceState() || {};
-            const presenceCount = Object.keys(state).length;
-            console.log('Presence sync:', presenceCount, 'users connected');
+            const presenceKeys = Object.keys(state);
+            const presenceCount = presenceKeys.length;
+            console.log('Presence sync:', presenceCount, 'users connected', presenceKeys);
+
+            // Update last ping time when we see opponent
             if (presenceCount >= 2) {
+              lastOpponentPingRef.current = Date.now();
               setOpponentConnected(true);
+              setOpponentDisconnected(false);
+            } else if (gameStartedRef.current && presenceCount < 2) {
+              // Only mark as disconnected if the game had started
+              console.log('Opponent may have disconnected, only', presenceCount, 'user(s) present');
             }
           }
         )
@@ -241,9 +313,39 @@ export function OnlineGameView({ roomId, onBack, profile }: OnlineGameViewProps)
           { event: 'leave' },
           (payload) => {
             console.log('User left:', payload.key);
+
+            // If game has started and opponent left, they forfeit
+            if (gameStartedRef.current && payload.key !== playerId && gameState.phase !== 'gameOver') {
+              console.log('Opponent disconnected! Declaring winner by forfeit.');
+              setOpponentDisconnected(true);
+              setOpponentConnected(false);
+
+              // Update game state to show winner
+              setGameState(prevState => ({
+                ...prevState,
+                phase: 'gameOver',
+                winner: playerColor
+              }));
+
+              // Update room status in database
+              supabase
+                .from('game_rooms')
+                .update({
+                  status: 'finished',
+                  game_state: gameStateToJSON({
+                    ...gameState,
+                    phase: 'gameOver',
+                    winner: playerColor
+                  })
+                })
+                .eq('id', roomId)
+                .then(() => console.log('Room status updated after opponent disconnect'));
+            }
           }
         )
         .subscribe(async (status) => {
+          if (!isMounted) return; // Don't do anything if unmounted
+
           if (status === 'SUBSCRIBED') {
             console.log('Game room channel subscribed successfully');
             // Send presence update to let opponent know we're connected
@@ -253,27 +355,33 @@ export function OnlineGameView({ roomId, onBack, profile }: OnlineGameViewProps)
               status: 'connected'
             });
           } else if (status === 'CHANNEL_ERROR' || status === 'CLOSED') {
-            console.error('Game room channel error/closed:', status);
-            // Attempt to reconnect after delay
-            setTimeout(() => {
-              console.log('Attempting to reconnect to game room');
-              if (channel) {
-                supabase.removeChannel(channel);
-              }
-              setupSubscription();
-            }, 3000);
+            // Only log error and attempt reconnect if still mounted
+            if (isMounted) {
+              console.error('Game room channel error/closed:', status);
+              // Attempt to reconnect after delay
+              setTimeout(() => {
+                if (!isMounted) return; // Check again before reconnecting
+                console.log('Attempting to reconnect to game room');
+                if (channel) {
+                  supabase.removeChannel(channel);
+                }
+                setupSubscription();
+              }, 3000);
+            }
           }
         });
 
       // Polling fallback: Check for opponent every 2 seconds while waiting
       pollingInterval = setInterval(async () => {
+        if (!isMounted) return; // Don't poll if unmounted
+
         const { data: room } = await supabase
           .from('game_rooms')
           .select('*')
           .eq('id', roomId)
           .single();
 
-        if (room) {
+        if (room && isMounted) {
           const bothConnected = room.black_player_id !== null && room.white_player_id !== null;
 
           // Update connection status
@@ -309,14 +417,98 @@ export function OnlineGameView({ roomId, onBack, profile }: OnlineGameViewProps)
 
     return () => {
       console.log('Unsubscribing from game room channel');
-      if (channel) {
-        supabase.removeChannel(channel);
-      }
+      isMounted = false; // Mark as unmounted first
       if (pollingInterval) {
         clearInterval(pollingInterval);
       }
+      if (channel) {
+        supabase.removeChannel(channel);
+      }
     };
   }, [roomId, playerId, playerName]);
+
+  // Heartbeat effect: Send regular "I'm alive" signals and check for opponent timeout
+  useEffect(() => {
+    if (!playerColor || roomStatus !== 'playing' || gameState.phase === 'gameOver' || forfeitHandled.current) {
+      return;
+    }
+
+    const heartbeatColumn = playerColor === 'white' ? 'white_last_active' : 'black_last_active';
+    const opponentHeartbeatColumn = playerColor === 'white' ? 'black_last_active' : 'white_last_active';
+
+    const sendHeartbeat = async () => {
+      await supabase
+        .from('game_rooms')
+        .update({ [heartbeatColumn]: new Date().toISOString() })
+        .eq('id', roomId);
+    };
+
+    const checkOpponentHeartbeat = async () => {
+      // Don't check if forfeit already handled
+      if (forfeitHandled.current || gameState.phase === 'gameOver') return;
+
+      const { data: room } = await supabase
+        .from('game_rooms')
+        .select('*')
+        .eq('id', roomId)
+        .single();
+
+      if (!room) return;
+
+      // If game is already finished/forfeited, don't process
+      if (room.status === 'finished' || room.status === 'forfeited' || room.forfeit_winner) {
+        return;
+      }
+
+      const opponentLastActive = room[opponentHeartbeatColumn];
+
+      if (opponentLastActive && gameStartedRef.current) {
+        const lastActiveTime = new Date(opponentLastActive).getTime();
+        const timeSinceActive = Date.now() - lastActiveTime;
+
+        if (timeSinceActive > DISCONNECT_TIMEOUT) {
+          console.log(`Opponent hasn't sent heartbeat for ${timeSinceActive}ms - declaring forfeit`);
+
+          // Prevent duplicate forfeit handling
+          forfeitHandled.current = true;
+
+          const forfeitGameState = {
+            ...gameState,
+            phase: 'gameOver' as const,
+            winner: playerColor
+          };
+
+          // Update database with forfeit
+          await supabase
+            .from('game_rooms')
+            .update({
+              status: 'forfeited',
+              forfeit_winner: playerColor,
+              game_state: gameStateToJSON(forfeitGameState)
+            })
+            .eq('id', roomId);
+
+          // Update local state
+          setGameState(forfeitGameState);
+          setOpponentDisconnected(true);
+          setOpponentConnected(false);
+          setRoomStatus('finished');
+        }
+      }
+    };
+
+    // Send initial heartbeat
+    sendHeartbeat();
+
+    // Set up intervals for heartbeat and opponent check
+    const heartbeatInterval = setInterval(sendHeartbeat, HEARTBEAT_INTERVAL);
+    const opponentCheckInterval = setInterval(checkOpponentHeartbeat, 10000); // Check every 10 seconds
+
+    return () => {
+      clearInterval(heartbeatInterval);
+      clearInterval(opponentCheckInterval);
+    };
+  }, [playerColor, roomStatus, roomId, gameState]);
 
   useEffect(() => {
     if (gameState.phase === 'gameOver' && !statsUpdated.current && profile) {
@@ -502,9 +694,13 @@ export function OnlineGameView({ roomId, onBack, profile }: OnlineGameViewProps)
     if (roomStatus === 'error') return 'Failed to connect to room';
     if (roomStatus === 'waiting') return 'Waiting for opponent...';
     if (gameState.phase === 'gameOver') {
+      if (opponentDisconnected) {
+        return 'Opponent left - You win!';
+      }
       const winner = gameState.winner === playerColor ? 'You win!' : 'You lose!';
       return winner;
     }
+    if (opponentDisconnected) return 'Opponent disconnected!';
     if (!isPlayerTurn) return "Opponent's turn...";
     if (gameState.mustRemove) return "Remove opponent's piece!";
     if (gameState.phase === 'placing') return 'Place a piece';
@@ -559,7 +755,7 @@ export function OnlineGameView({ roomId, onBack, profile }: OnlineGameViewProps)
         </div>
       </header>
 
-      <main className="flex-1 flex flex-col lg:flex-row items-center lg:items-start justify-center gap-8 p-4 pt-8">
+      <main className="flex-1 flex flex-col lg:flex-row items-center lg:items-start justify-center gap-6 lg:gap-8 p-3 lg:p-4 pt-6 lg:pt-8 overflow-x-hidden">
         <div className="flex flex-col items-center gap-6">
           {roomStatus === 'waiting' ? (
             <motion.div
@@ -614,17 +810,41 @@ export function OnlineGameView({ roomId, onBack, profile }: OnlineGameViewProps)
 
         {roomStatus !== 'waiting' && (
           <div className="w-full max-w-sm lg:w-80">
-            <div className="rounded-xl p-4 shadow-xl border" style={{ backgroundColor: theme.cardBg, borderColor: theme.lineColor + '20' }}>
-              <h3 className="font-semibold mb-4" style={{ color: theme.textColor }}>Game Status</h3>
+            <div
+              className="rounded-xl p-4 shadow-xl border overflow-hidden"
+              style={{
+                backgroundColor: theme.cardBg,
+                borderColor: theme.scoreboardGradient ? 'transparent' : theme.lineColor + '20',
+                borderImageSource: theme.scoreboardGradient,
+                borderImageSlice: 1,
+                borderWidth: theme.scoreboardGradient ? '1px' : '0px'
+              }}
+            >
+              <h3
+                className="font-semibold mb-4 text-center"
+                style={theme.scoreboardGradient ? {
+                  backgroundImage: theme.scoreboardGradient,
+                  WebkitBackgroundClip: 'text',
+                  WebkitTextFillColor: 'transparent',
+                  fontWeight: '800',
+                  fontSize: '1.25rem'
+                } : { color: theme.textColor }}
+              >
+                Game Status
+              </h3>
               <div
                 className="p-4 rounded-xl text-center font-bold text-lg shadow-inner"
                 style={{
-                  backgroundColor: gameState.phase === 'gameOver'
-                    ? theme.accentColor
-                    : isPlayerTurn
-                      ? theme.accentColor + '20'
-                      : theme.lineColor + '10',
-                  color: gameState.phase === 'gameOver' ? '#fff' : theme.textColor
+                  background: gameState.phase === 'gameOver'
+                    ? theme.scoreboardGradient || theme.accentColor
+                    : theme.scoreboardGradient
+                      ? `linear-gradient(to right, ${theme.cardBg}, ${theme.cardBg}) padding-box, ${theme.scoreboardGradient} border-box`
+                      : isPlayerTurn
+                        ? theme.accentColor + '20'
+                        : theme.lineColor + '10',
+                  color: gameState.phase === 'gameOver' ? '#fff' : theme.textColor,
+                  border: theme.scoreboardGradient ? '2px solid transparent' : 'none',
+                  boxShadow: theme.scoreboardGradient ? '0 0 15px rgba(34, 197, 94, 0.2)' : 'none'
                 }}
               >
                 {getStatusMessage()}
@@ -641,22 +861,31 @@ export function OnlineGameView({ roomId, onBack, profile }: OnlineGameViewProps)
                 </div>
                 <div className="flex justify-between text-sm">
                   <span className="opacity-60 font-medium" style={{ color: theme.textColor }}>Opponent</span>
-                  <span className="font-bold" style={{ color: opponentConnected ? theme.accentColor : '#e5a02b' }}>
-                    {opponentConnected ? 'Connected' : 'Waiting...'}
+                  <span className="font-bold" style={{ color: opponentConnected ? theme.accentColor : opponentDisconnected ? '#ef4444' : '#e5a02b' }}>
+                    {opponentConnected ? 'Connected' : opponentDisconnected ? 'Disconnected' : 'Waiting...'}
                   </span>
                 </div>
               </div>
 
               {gameState.phase === 'gameOver' && (
                 <div className="mt-6 space-y-3">
-                  <Button
-                    onClick={handlePlayAgain}
-                    className="w-full h-12 font-bold"
-                    style={{ backgroundColor: theme.accentColor, color: '#fff' }}
-                  >
-                    <RefreshCw className="w-5 h-5 mr-2" />
-                    Play Again
-                  </Button>
+                  {/* Only show Play Again if opponent is still connected */}
+                  {!opponentDisconnected && (
+                    <Button
+                      onClick={handlePlayAgain}
+                      className="w-full h-12 font-bold"
+                      style={{ backgroundColor: theme.accentColor, color: '#fff' }}
+                    >
+                      <RefreshCw className="w-5 h-5 mr-2" />
+                      Play Again
+                    </Button>
+                  )}
+                  {opponentDisconnected && (
+                    <div className="text-center py-3 rounded-lg mb-2" style={{ backgroundColor: '#ef444420', color: '#ef4444' }}>
+                      <p className="font-medium">Opponent left the game</p>
+                      <p className="text-sm opacity-80">Victory by forfeit!</p>
+                    </div>
+                  )}
                   <Button
                     variant="outline"
                     onClick={onBack}
@@ -664,14 +893,33 @@ export function OnlineGameView({ roomId, onBack, profile }: OnlineGameViewProps)
                     style={{ borderColor: theme.lineColor + '20', color: theme.textColor }}
                   >
                     <Home className="w-5 h-5 mr-2" />
-                    Back to Menu
+                    {opponentDisconnected ? 'Find New Game' : 'Back to Menu'}
                   </Button>
                 </div>
               )}
             </div>
 
-            <div className="rounded-xl p-4 mt-4 shadow-lg border" style={{ backgroundColor: theme.cardBg, borderColor: theme.lineColor + '20' }}>
-              <h3 className="font-semibold mb-4" style={{ color: theme.textColor }}>Players</h3>
+            <div
+              className="rounded-xl p-4 mt-4 shadow-lg border overflow-hidden"
+              style={{
+                backgroundColor: theme.cardBg,
+                borderColor: theme.scoreboardGradient ? 'transparent' : theme.lineColor + '20',
+                borderImageSource: theme.scoreboardGradient,
+                borderImageSlice: 1,
+                borderWidth: theme.scoreboardGradient ? '1px' : '0px'
+              }}
+            >
+              <h3
+                className="font-semibold mb-4 text-center"
+                style={theme.scoreboardGradient ? {
+                  backgroundImage: theme.scoreboardGradient,
+                  WebkitBackgroundClip: 'text',
+                  WebkitTextFillColor: 'transparent',
+                  fontWeight: '800'
+                } : { color: theme.textColor }}
+              >
+                Players
+              </h3>
               <div className="space-y-4">
                 <div className="flex items-center gap-3">
                   <div

@@ -92,8 +92,24 @@ CREATE TABLE IF NOT EXISTS public.game_rooms (
   game_state JSONB NOT NULL,
   status TEXT NOT NULL DEFAULT 'waiting',
   created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
-  updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+  updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+  white_last_active TIMESTAMP WITH TIME ZONE,
+  black_last_active TIMESTAMP WITH TIME ZONE,
+  forfeit_winner TEXT
 );
+
+-- Add columns if they don't exist (for existing tables)
+DO $$ BEGIN
+  IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'game_rooms' AND column_name = 'white_last_active') THEN
+    ALTER TABLE public.game_rooms ADD COLUMN white_last_active TIMESTAMP WITH TIME ZONE;
+  END IF;
+  IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'game_rooms' AND column_name = 'black_last_active') THEN
+    ALTER TABLE public.game_rooms ADD COLUMN black_last_active TIMESTAMP WITH TIME ZONE;
+  END IF;
+  IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'game_rooms' AND column_name = 'forfeit_winner') THEN
+    ALTER TABLE public.game_rooms ADD COLUMN forfeit_winner TEXT;
+  END IF;
+END $$;
 
 -- Enable RLS
 ALTER TABLE IF EXISTS public.game_rooms ENABLE ROW LEVEL SECURITY;

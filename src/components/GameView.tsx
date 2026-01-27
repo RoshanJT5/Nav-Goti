@@ -255,7 +255,7 @@ export function GameView({
         </div>
       </header>
 
-      <main className="flex-1 flex flex-col lg:flex-row items-center lg:items-start justify-center gap-12 p-6 pt-12">
+      <main className="flex-1 flex flex-col lg:flex-row items-center lg:items-start justify-center gap-6 lg:gap-12 p-3 lg:p-6 pt-6 lg:pt-12 overflow-x-hidden">
         <div className="flex flex-col items-center gap-8">
           <GameInfoPanel
             gameState={gameState}

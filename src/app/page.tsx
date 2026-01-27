@@ -39,12 +39,19 @@ import {
   Shuffle,
   UserCircle,
   Settings,
+  Download
 } from "lucide-react";
+import { usePWA } from "@/hooks/use-pwa";
 
 type Screen = 'home' | 'game' | 'rules' | 'matchmaking';
 
+// Session storage keys
+const ACTIVE_ROOM_KEY = 'mill_game_active_room';
+const GAME_MODE_KEY = 'mill_game_mode';
+
 export default function Home() {
   const { profile, loading: profileLoading, updateProfile } = useGuestProfile();
+  const { isInstallable, installApp } = usePWA();
   const [screen, setScreen] = useState<Screen>('home');
   const [gameMode, setGameMode] = useState<GameMode>('local');
   const [difficulty, setDifficulty] = useState<Difficulty>('medium');
@@ -53,8 +60,45 @@ export default function Home() {
   const [showProfileDialog, setShowProfileDialog] = useState(false);
   const [roomCode, setRoomCode] = useState('');
   const [copied, setCopied] = useState(false);
+  const [sessionRestored, setSessionRestored] = useState(false);
 
   const theme = getTheme(profile?.theme_id);
+
+  // Restore active game session on page load (for refresh persistence)
+  useEffect(() => {
+    if (typeof window !== 'undefined' && !sessionRestored) {
+      const savedRoom = localStorage.getItem(ACTIVE_ROOM_KEY);
+      const savedMode = localStorage.getItem(GAME_MODE_KEY);
+
+      if (savedRoom && savedMode === 'online') {
+        console.log('Restoring online game session:', savedRoom);
+        setRoomCode(savedRoom);
+        setGameMode('online');
+        setScreen('game');
+      }
+      setSessionRestored(true);
+    }
+  }, [sessionRestored]);
+
+  // Save/clear session when entering/leaving online game
+  const enterOnlineGame = useCallback((code: string) => {
+    if (typeof window !== 'undefined') {
+      localStorage.setItem(ACTIVE_ROOM_KEY, code);
+      localStorage.setItem(GAME_MODE_KEY, 'online');
+    }
+    setRoomCode(code);
+    setGameMode('online');
+    setScreen('game');
+  }, []);
+
+  const exitOnlineGame = useCallback(() => {
+    if (typeof window !== 'undefined') {
+      localStorage.removeItem(ACTIVE_ROOM_KEY);
+      localStorage.removeItem(GAME_MODE_KEY);
+    }
+    setRoomCode('');
+    setScreen('home');
+  }, []);
 
   const startGame = (mode: GameMode) => {
     if (mode === 'ai') {
@@ -90,6 +134,11 @@ export default function Home() {
   };
 
   const handleMatchFound = useCallback((matchedRoomId: string) => {
+    // Use the new enterOnlineGame to properly save session
+    if (typeof window !== 'undefined') {
+      localStorage.setItem(ACTIVE_ROOM_KEY, matchedRoomId);
+      localStorage.setItem(GAME_MODE_KEY, 'online');
+    }
     setRoomCode(matchedRoomId);
     setGameMode('online');
     setScreen('game');
@@ -125,7 +174,7 @@ export default function Home() {
       return (
         <OnlineGameView
           roomId={roomCode}
-          onBack={() => setScreen('home')}
+          onBack={exitOnlineGame}
           profile={profile}
         />
       );
@@ -269,6 +318,18 @@ export default function Home() {
               </button>
             </nav>
 
+            {isInstallable && (
+              <Button
+                onClick={installApp}
+                variant="outline"
+                className="mr-2 flex items-center gap-2 border-green-500/50 text-green-500 hover:bg-green-500/10"
+                style={{ backgroundColor: theme.cardBg }}
+              >
+                <Download className="w-4 h-4" />
+                <span className="hidden sm:inline">Install App</span>
+              </Button>
+            )}
+
             <Button
               onClick={() => setShowProfileDialog(true)}
               variant="ghost"
@@ -369,7 +430,7 @@ export default function Home() {
               className="w-full h-full border rounded-xl p-6 transition-all hover:scale-[1.02] hover:shadow-xl group text-left"
               style={{ backgroundColor: theme.cardBg, borderColor: theme.boardLineColor + '20' }}
             >
-              <div className="w-14 h-14 rounded-xl flex items-center justify-center mb-4 group-hover:scale-110 transition-transform shadow-lg" style={{ backgroundColor: theme.gameModes.online.color }}>
+              <div className="w-14 h-14 rounded-xl flex items-center justify-center mb-4 group-hover:scale-110 transition-transform shadow-lg" style={{ backgroundColor: '#ec4899' }}>
                 <Globe className="w-7 h-7 text-white" />
               </div>
               <h3 className="text-xl font-bold mb-2" style={{ color: theme.isDark ? '#ffffff' : '#1f2937' }}>
@@ -378,7 +439,7 @@ export default function Home() {
               <p className="text-sm opacity-60" style={{ color: theme.isDark ? '#e5e7eb' : '#4b5563' }}>
                 Play with friends or random opponents online
               </p>
-              <div className="mt-4 flex items-center font-bold" style={{ color: theme.gameModes.online.color }}>
+              <div className="mt-4 flex items-center font-bold" style={{ color: '#ec4899' }}>
                 <Trophy className="w-4 h-4 mr-1" />
                 Play Online
               </div>
@@ -410,8 +471,8 @@ export default function Home() {
                   Slide pieces along lines to adjacent empty points
                 </p>
               </div>
-              <div className="rounded-lg p-4" style={{ backgroundColor: theme.gameModes.online.bg }}>
-                <div className="font-bold mb-1" style={{ color: theme.gameModes.online.color }}>3. Mill</div>
+              <div className="rounded-lg p-4" style={{ backgroundColor: 'rgba(236, 72, 153, 0.1)' }}>
+                <div className="font-bold mb-1" style={{ color: '#ec4899' }}>3. Mill</div>
                 <p className="opacity-80" style={{ color: theme.isDark ? '#e5e7eb' : '#4b5563' }}>
                   Get 3 in a row to remove an opponent&apos;s piece
                 </p>
@@ -564,6 +625,11 @@ export default function Home() {
 
             <Button
               onClick={() => {
+                // Save session before entering game
+                if (typeof window !== 'undefined') {
+                  localStorage.setItem(ACTIVE_ROOM_KEY, roomCode);
+                  localStorage.setItem(GAME_MODE_KEY, 'online');
+                }
                 setGameMode('online');
                 setShowOnlineDialog(false);
                 setScreen('game');

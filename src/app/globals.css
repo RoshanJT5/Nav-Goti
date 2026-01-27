@@ -159,3 +159,77 @@
 .animate-bounce-slow:hover {
   animation-play-state: paused;
 }
+
+/* Mobile optimizations */
+* {
+  -webkit-tap-highlight-color: transparent;
+  -webkit-touch-callout: none;
+}
+
+html {
+  /* Prevent iOS text size adjust after orientation change */
+  -webkit-text-size-adjust: 100%;
+  /* Prevent pull-to-refresh on iOS */
+  overscroll-behavior-y: contain;
+  /* Smooth scrolling */
+  scroll-behavior: smooth;
+}
+
+body {
+  /* Prevent iOS bounce/rubber-band scrolling */
+  position: fixed;
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+  /* Support for iPhone notch */
+  padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left);
+}
+
+#__next {
+  height: 100%;
+  overflow-y: auto;
+  overflow-x: hidden;
+  -webkit-overflow-scrolling: touch;
+}
+
+/* Touch-friendly buttons - minimum 44x44px tap targets */
+button, a, [role="button"] {
+  min-height: 44px;
+  min-width: 44px;
+}
+
+/* Remove iOS input zoom */
+input, select, textarea {
+  font-size: 16px !important;
+}
+
+/* Prevent double-tap zoom on buttons */
+button {
+  touch-action: manipulation;
+}
+
+/* Optimize animations for mobile */
+@media (prefers-reduced-motion: reduce) {
+  * {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}
+
+/* iOS standalone mode specific styles */
+@media (display-mode: standalone) {
+  body {
+    -webkit-user-select: none;
+    user-select: none;
+  }
+}
+
+/* Landscape mode optimization for mobile */
+@media (max-height: 500px) and (orientation: landscape) {
+  /* Adjust layout for landscape on mobile */
+  .game-board {
+    max-height: 70vh;
+  }
+}
+

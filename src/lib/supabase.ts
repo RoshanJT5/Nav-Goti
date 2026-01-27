@@ -22,9 +22,12 @@ export interface GameRoom {
   black_player_id: string | null;
   black_player_name: string | null;
   game_state: GameStateJSON;
-  status: 'waiting' | 'playing' | 'finished';
+  status: 'waiting' | 'playing' | 'finished' | 'forfeited';
   created_at: string;
   updated_at: string;
+  white_last_active: string | null;
+  black_last_active: string | null;
+  forfeit_winner: 'white' | 'black' | null;
 }
 
 export interface MatchmakingQueue {

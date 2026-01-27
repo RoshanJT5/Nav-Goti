@@ -37,6 +37,8 @@ export interface Theme {
     local: { color: string; bg: string };
     online: { color: string; bg: string };
   };
+  scoreboardGradient?: string;
+  chatGradient?: string;
 }
 
 export const THEMES: Theme[] = [
@@ -70,11 +72,11 @@ export const THEMES: Theme[] = [
     accentColor: '#5a9aa8',
     mutedColor: '#4a8a98',
     isDark: true,
-      gameModes: {
-        ai: { color: '#5a9aa8', bg: 'rgba(90, 154, 168, 0.1)' },
-        local: { color: '#629924', bg: 'rgba(98, 153, 36, 0.1)' },
-        online: { color: '#ffa333', bg: 'rgba(255, 163, 51, 0.1)' },
-      }
+    gameModes: {
+      ai: { color: '#5a9aa8', bg: 'rgba(90, 154, 168, 0.1)' },
+      local: { color: '#629924', bg: 'rgba(98, 153, 36, 0.1)' },
+      online: { color: '#ffa333', bg: 'rgba(255, 163, 51, 0.1)' },
+    }
   },
   {
     id: 'modern',
@@ -199,8 +201,8 @@ export const THEMES: Theme[] = [
   {
     id: 'dark',
     name: 'Cyber Neon',
-    boardBg: '#020617',
-    boardBorder: '#0f172a',
+    boardBg: '#000000',
+    boardBorder: '#09090b',
     boardLineColor: '#22c55e',
     lineColor: '#22c55e',
     lineWidth: 2,
@@ -211,21 +213,21 @@ export const THEMES: Theme[] = [
     headingColor: '#22c55e',
     textColor: '#22c55e',
     whitePiece: {
-      bg: 'linear-gradient(to bottom right, #4ade80, #22c55e)',
-      border: '#166534',
-      shadow: '0 0 20px rgba(34, 197, 94, 0.6)',
+      bg: 'linear-gradient(135deg, #22c55e, #166534)',
+      border: '#4ade80',
+      shadow: '0 0 25px rgba(34, 197, 94, 0.9), inset 0 0 10px rgba(255,255,255,0.5)',
       content: '⚡',
-      color: '#052e16',
+      color: '#ffffff',
     },
     blackPiece: {
-      bg: 'linear-gradient(to bottom right, #ef4444, #b91c1c)',
-      border: '#7f1d1d',
-      shadow: '0 0 20px rgba(239, 68, 68, 0.6)',
+      bg: 'linear-gradient(135deg, #ef4444, #7f1d1d)',
+      border: '#f87171',
+      shadow: '0 0 25px rgba(239, 68, 68, 0.9), inset 0 0 10px rgba(255,255,255,0.5)',
       content: '🔥',
-      color: '#450a0a',
+      color: '#ffffff',
     },
     appBackground: '#000000',
-    headerBg: '#020617',
+    headerBg: '#000000',
     cardBg: '#09090b',
     accentColor: '#22c55e',
     mutedColor: '#16a34a',
@@ -233,8 +235,10 @@ export const THEMES: Theme[] = [
     gameModes: {
       ai: { color: '#22c55e', bg: 'rgba(34, 197, 94, 0.1)' },
       local: { color: '#3b82f6', bg: 'rgba(59, 130, 246, 0.1)' },
-      online: { color: '#ec4899', bg: 'rgba(236, 72, 153, 0.1)' },
-    }
+      online: { color: '#22c55e', bg: 'linear-gradient(135deg, rgba(34, 197, 94, 0.1), rgba(59, 130, 246, 0.1), rgba(239, 68, 68, 0.1))' },
+    },
+    scoreboardGradient: 'linear-gradient(135deg, #22c55e, #3b82f6, #ef4444)',
+    chatGradient: 'linear-gradient(135deg, #22c55e, #3b82f6, #ef4444)',
   }
 ];
 
