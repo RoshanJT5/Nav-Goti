@@ -153,7 +153,7 @@ export default function Home() {
       <div className="min-h-screen bg-[#312e2b] flex items-center justify-center">
         <div className="flex flex-col items-center gap-4">
           <div className="w-12 h-12 border-4 border-[#629924] border-t-transparent rounded-full animate-spin" />
-          <p className="text-gray-400 font-medium">Initializing Mill Game...</p>
+          <p className="text-gray-400 font-medium">Initializing Nav Goti...</p>
         </div>
       </div>
     );
@@ -200,7 +200,7 @@ export default function Home() {
               className="flex items-center gap-2 transition-colors"
               style={{ color: theme.textColor }}
             >
-              <span className="text-2xl font-bold" style={{ color: theme.titleColor }}>Mill</span>
+              <span className="text-2xl font-bold" style={{ color: theme.titleColor }}>Nav Goti</span>
             </button>
           </div>
         </header>
@@ -213,7 +213,7 @@ export default function Home() {
           >
             <h1 className="text-3xl font-bold mb-6 flex items-center gap-3" style={{ color: theme.titleColor }}>
               <BookOpen className="w-8 h-8" style={{ color: theme.accentColor }} />
-              Nine Men&apos;s Morris Rules
+              Nav Goti Rules
             </h1>
 
             <div className="space-y-8">
@@ -295,9 +295,9 @@ export default function Home() {
         <div className="max-w-6xl mx-auto flex items-center justify-between">
           <div className="flex items-center gap-2">
             <div className="w-10 h-10 rounded-lg flex items-center justify-center shadow-lg" style={{ backgroundColor: theme.accentColor }}>
-              <span className="text-white font-bold text-xl">M</span>
+              <span className="text-white font-bold text-xl">N</span>
             </div>
-            <span className="text-2xl font-bold" style={{ color: theme.titleColor }}>Mill Game</span>
+            <span className="text-2xl font-bold" style={{ color: theme.titleColor }}>Nav Goti</span>
           </div>
 
           <div className="flex items-center gap-4">
@@ -359,10 +359,10 @@ export default function Home() {
           className="text-center mb-12"
         >
           <h1 className="text-5xl md:text-6xl font-bold mb-4" style={{ color: theme.id === 'classic' ? '#629924' : theme.titleColor }}>
-            Nine Men&apos;s Morris
+            Nav Goti
           </h1>
           <p className="text-xl max-w-2xl mx-auto opacity-80" style={{ color: theme.isDark ? '#e5e7eb' : '#4b5563' }}>
-            The classic strategy board game. Form mills, capture pieces, and
+            The ancient strategy game from Sindhu, India. Form mills, capture pieces, and
             outsmart your opponent.
           </p>
         </motion.div>

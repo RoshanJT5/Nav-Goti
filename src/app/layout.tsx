@@ -4,8 +4,8 @@ import ErrorReporter from "@/components/ErrorReporter";
 import { PWAInstaller } from "@/components/PWAInstaller";
 
 export const metadata: Metadata = {
-  title: "Mill Game - Nine Men's Morris",
-  description: "Play Nine Men's Morris online. Challenge AI, play locally with friends, or compete online against players worldwide.",
+  title: "Nav Goti - Ancient Indian Strategy Game",
+  description: "Play Nav Goti, the ancient strategy game from Sindhu, India. Challenge AI, play locally with friends, or compete online against players worldwide.",
   manifest: "/manifest.json",
   themeColor: [
     { media: "(prefers-color-scheme: light)", color: "#ffffff" },
@@ -21,7 +21,7 @@ export const metadata: Metadata = {
   appleWebApp: {
     capable: true,
     statusBarStyle: "black-translucent",
-    title: "Mill Game"
+    title: "Nav Goti"
   },
   formatDetection: {
     telephone: false

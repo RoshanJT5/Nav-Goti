@@ -122,17 +122,17 @@ export function getAllMills(board: BoardState, player: Player): number[][] {
 
 export function canRemovePiece(board: BoardState, position: Position, opponent: Player): boolean {
   if (board[position] !== opponent) return false;
-  
+
   const inMill = checkMill(board, position, opponent);
-  
+
   if (!inMill) return true;
-  
+
   const opponentPositions = board
     .map((p, i) => (p === opponent ? i : -1))
     .filter((i) => i !== -1);
-  
+
   const allInMills = opponentPositions.every((pos) => checkMill(board, pos, opponent));
-  
+
   return allInMills;
 }
 
@@ -140,6 +140,17 @@ export function getValidMoves(state: GameState, position: Position): Position[] 
   const player = state.board[position];
   if (!player) return [];
 
+  // Count pieces on board for the player
+  const piecesOnBoard = player === 'white' ? state.whitePiecesOnBoard : state.blackPiecesOnBoard;
+
+  // Flying rule: If player has exactly 3 pieces, they can move to ANY empty position
+  if (piecesOnBoard === 3) {
+    return state.board
+      .map((p, i) => (p === null ? i : -1))
+      .filter((i) => i !== -1);
+  }
+
+  // Normal rule: Can only move to adjacent empty positions
   return ADJACENT[position].filter((adj) => state.board[adj] === null);
 }
 
@@ -148,7 +159,17 @@ export function hasValidMoves(state: GameState, player: Player): boolean {
     .map((p, i) => (p === player ? i : -1))
     .filter((i) => i !== -1);
 
-  return playerPositions.some((pos) => 
+  // Count pieces on board for the player
+  const piecesOnBoard = player === 'white' ? state.whitePiecesOnBoard : state.blackPiecesOnBoard;
+
+  // Flying rule: If player has exactly 3 pieces, they can move to ANY empty position
+  if (piecesOnBoard === 3) {
+    // Check if there's at least one empty position on the board
+    return state.board.some((p) => p === null);
+  }
+
+  // Normal rule: Check if any piece has an adjacent empty position
+  return playerPositions.some((pos) =>
     ADJACENT[pos].some((adj) => state.board[adj] === null)
   );
 }

@@ -1,0 +1,102 @@
+You are NAV-TIN Mobile Builder AI.
+
+There is a file in this project folder called:
+"NAV-TIN_ShipMobileApp_Blueprint.md"
+
+First, read and fully understand this blueprint.
+
+Your task is to build a complete, production-ready native mobile game for:
+
+- iOS using Swift 5 + SwiftUI
+- Android using Kotlin + Jetpack Compose
+
+The game is a Nine Men’s Morris variant with:
+- AI (Easy, Medium, Hard)
+- Local hot-seat multiplayer
+- Online random matchmaking
+- Private rooms with 6-digit codes
+- Supabase Realtime backend
+- Anonymous authentication
+- AdMob monetization (Banner, Interstitial, Rewarded)
+
+ARCHITECTURE RULES:
+- Use MVVM
+- Clean architecture
+- Shared game engine logic per platform
+- Canvas-based board rendering
+- Smooth animations (120Hz where possible)
+- Haptic feedback on moves and mills
+- Sound effects and background music
+- Dark/Neon theme support
+
+MULTIPLAYER:
+- Use Supabase Realtime Channels
+- Implement rooms, players, moves tables
+- Turn validation server-side
+- Reconnection and presence handling
+- Optimistic UI with rollback on conflict
+
+ADS:
+- Integrate Google AdMob
+- Banner on Home & Settings
+- Interstitial after each finished match (with frequency cap)
+- Rewarded ads for cosmetic unlocks / retry
+- Implement iOS App Tracking Transparency (ATT)
+
+SECURITY:
+- Never hardcode API keys
+- Use .env for Supabase and AdMob keys
+- Enable Supabase RLS
+- Use secure storage (Keychain / EncryptedSharedPreferences)
+
+BUILD PROCESS (VERY IMPORTANT):
+Work in phases. After each phase, stop and ask for confirmation.
+
+PHASE 1:
+- Create project structure for iOS and Android
+- Setup MVVM folders
+- Setup game engine models (Board, GameState, MillDetector, AI)
+
+PHASE 2:
+- Implement board rendering
+- Implement piece movement
+- Implement mill detection and removal
+- Implement win/lose/draw logic
+
+PHASE 3:
+- Implement AI difficulty levels
+- Implement local hot-seat multiplayer
+
+PHASE 4:
+- Integrate Supabase
+- Implement random matchmaking
+- Implement private rooms
+- Implement realtime sync
+
+PHASE 5:
+- Integrate AdMob (Banner, Interstitial, Rewarded)
+- Implement ATT on iOS
+
+PHASE 6:
+- Add animations, haptics, sounds
+- Add themes (Classic & Cyber Neon)
+
+PHASE 7:
+- Prepare Play Store & App Store builds
+- Generate store descriptions
+- Generate privacy policy
+- Generate screenshots checklist
+
+CODING RULES:
+- Write clean, commented code
+- Handle all errors
+- Add loading states
+- Support orientation changes
+- Support offline mode for AI & local play
+
+After reading the blueprint, start by:
+
+1. Summarizing your understanding of the NAV-TIN app.
+2. Proposing the detailed build plan.
+3. Creating Phase 1 project structure.
+4. Waiting for my confirmation before moving to Phase 2.

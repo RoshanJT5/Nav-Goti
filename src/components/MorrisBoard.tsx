@@ -13,9 +13,9 @@ import {
 } from "@/lib/morris-game";
 import { getTheme } from "@/lib/themes";
 
-const BOARD_SIZE = 420;
+const BOARD_SIZE = 380;
 const CELL_SIZE = BOARD_SIZE / 6;
-const PIECE_SIZE = 36;
+const PIECE_SIZE = 32;
 
 const LINES: { from: Position; to: Position }[] = [
   { from: 0, to: 1 }, { from: 1, to: 2 },
@@ -100,12 +100,12 @@ export function MorrisBoard({
     const updateScale = () => {
       if (containerRef.current) {
         const containerWidth = containerRef.current.offsetWidth;
-        const targetWidth = BOARD_SIZE + 80;
-        if (containerWidth < targetWidth) {
-          setScale(containerWidth / targetWidth);
-        } else {
-          setScale(1);
-        }
+        const containerHeight = containerRef.current.offsetHeight;
+        const targetSize = BOARD_SIZE + 60;
+        const scaleW = containerWidth / targetSize;
+        const scaleH = containerHeight / targetSize;
+        const newScale = Math.min(scaleW, scaleH, 1);
+        setScale(newScale);
       }
     };
 
@@ -117,14 +117,14 @@ export function MorrisBoard({
   return (
     <div
       ref={containerRef}
-      className="w-full flex justify-center items-center overflow-visible"
-      style={{ height: (BOARD_SIZE + 80) * scale }}
+      className="w-full h-full flex justify-center items-center"
     >
       <div
-        className="relative rounded-3xl p-10 shadow-2xl transition-all duration-500 origin-center"
+        className="relative rounded-2xl shadow-2xl transition-all duration-500"
         style={{
-          width: BOARD_SIZE + 80,
-          height: BOARD_SIZE + 80,
+          width: BOARD_SIZE + 60,
+          height: BOARD_SIZE + 60,
+          padding: 30,
           backgroundColor: theme.id === 'dark' ? '#000000' : theme.boardBorder,
           boxShadow: theme.id === 'dark'
             ? '0 0 40px rgba(34, 197, 94, 0.2)'
@@ -281,10 +281,13 @@ export function MorrisBoard({
                         exit={{ scale: 0, opacity: 0 }}
                         transition={{ type: "spring", stiffness: 500, damping: 30 }}
                         className={`
-                          w-[40px] h-[40px] rounded-full flex items-center justify-center text-xl
+                          rounded-full flex items-center justify-center text-xl
                           ${isSelected ? 'ring-4 ring-yellow-400 ring-opacity-80 scale-110' : ''}
                         `}
                         style={{
+                          width: PIECE_SIZE + 4,
+                          height: PIECE_SIZE + 4,
+                          aspectRatio: '1 / 1',
                           background: pieceTheme.bg,
                           border: `2px solid ${pieceTheme.border}`,
                           boxShadow: isCyber ? `0 0 15px ${piece === 'white' ? '#22c55e' : '#ef4444'}` : pieceTheme.shadow,

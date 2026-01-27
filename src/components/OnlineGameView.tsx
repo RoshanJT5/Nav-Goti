@@ -718,7 +718,7 @@ export function OnlineGameView({ roomId, onBack, profile }: OnlineGameViewProps)
             style={{ color: theme.textColor + '80' }}
           >
             <Home className="w-5 h-5" />
-            <span className="font-semibold">Mill Game</span>
+            <span className="font-semibold">Nav Goti</span>
           </button>
           <div className="flex items-center gap-4">
             <div className="flex items-center gap-2">

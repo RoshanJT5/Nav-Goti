@@ -1,7 +1,7 @@
 {
-    "name": "Mill Game - Nine Men's Morris",
-    "short_name": "Mill Game",
-    "description": "Play Nine Men's Morris - Challenge AI, play locally, or compete online",
+    "name": "Nav Goti - Ancient Indian Strategy Game",
+    "short_name": "Nav Goti",
+    "description": "Play Nav Goti, the ancient strategy game from Sindhu, India - Challenge AI, play locally, or compete online",
     "start_url": "/",
     "display": "standalone",
     "background_color": "#000000",
