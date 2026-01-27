@@ -38,6 +38,12 @@ export function GameChat({ roomId, playerId, playerName, themeId = 'classic' }: 
     isOpenRef.current = isOpen;
   }, [isOpen]);
 
+  // Debug: log when chat component mounts
+  useEffect(() => {
+    console.log('GameChat component mounted for room:', roomId);
+    return () => console.log('GameChat component unmounted');
+  }, [roomId]);
+
   useEffect(() => {
     let isSubscribed = true;
 
@@ -226,12 +232,13 @@ export function GameChat({ roomId, playerId, playerName, themeId = 'classic' }: 
 
       <Button
         onClick={toggleChat}
-        className="w-14 h-14 rounded-full shadow-2xl relative transition-transform hover:scale-105 active:scale-95"
+        className="w-14 h-14 rounded-full shadow-2xl relative transition-transform hover:scale-105 active:scale-95 animate-bounce-slow"
         style={{ backgroundColor: theme.accentColor }}
+        aria-label="Open chat"
       >
         <MessageCircle className="w-6 h-6 text-white" />
         {unreadCount > 0 && (
-          <span className="absolute -top-1 -right-1 bg-red-500 text-white text-[10px] font-bold w-5 h-5 rounded-full flex items-center justify-center border-2 border-white">
+          <span className="absolute -top-1 -right-1 bg-red-500 text-white text-[10px] font-bold w-5 h-5 rounded-full flex items-center justify-center border-2 border-white animate-pulse">
             {unreadCount > 9 ? '9+' : unreadCount}
           </span>
         )}
