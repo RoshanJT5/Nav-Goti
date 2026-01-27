@@ -147,53 +147,71 @@ export function MorrisBoard({
             height={BOARD_SIZE}
           >
             <defs>
-              <linearGradient id="cyber-board-gradient" x1="0" y1="0" x2={BOARD_SIZE} y2={BOARD_SIZE} gradientUnits="userSpaceOnUse">
+              <linearGradient
+                id="cyber-board-gradient"
+                x1="0" y1="0" x2={BOARD_SIZE} y2={BOARD_SIZE}
+                gradientUnits="userSpaceOnUse"
+              >
                 <stop offset="0%" stopColor="#22c55e" />
                 <stop offset="50%" stopColor="#3b82f6" />
                 <stop offset="100%" stopColor="#ef4444" />
               </linearGradient>
-              <filter id="neon-glow-line" x="-50" y="-50" width="100" height="100" filterUnits="userSpaceOnUse">
-                <feGaussianBlur in="SourceGraphic" stdDeviation="3" result="blur" />
+
+              <filter
+                id="neon-glow"
+                x="-100" y="-100" width={BOARD_SIZE + 200} height={BOARD_SIZE + 200}
+                filterUnits="userSpaceOnUse"
+              >
+                <feGaussianBlur in="SourceGraphic" stdDeviation="3" result="blur3" />
+                <feGaussianBlur in="SourceGraphic" stdDeviation="8" result="blur8" />
                 <feMerge>
-                  <feMergeNode in="blur" />
+                  <feMergeNode in="blur8" />
+                  <feMergeNode in="blur3" />
                   <feMergeNode in="SourceGraphic" />
                 </feMerge>
               </filter>
+
               <style>
                 {`
                   @keyframes neon-pulse-refined {
-                    0%, 100% { opacity: 0.8; stroke-width: ${isCyber ? 7 : 2}; }
-                    50% { opacity: 1; stroke-width: ${isCyber ? 9 : 2}; }
+                    0%, 100% { opacity: 0.8; }
+                    50% { opacity: 1; }
                   }
-                  .neon-line {
+                  .neon-group {
                     animation: neon-pulse-refined 4s ease-in-out infinite;
                   }
                 `}
               </style>
             </defs>
-            {LINES.map((line, index) => {
-              const from = getCoords(line.from);
-              const to = getCoords(line.to);
 
-              return (
-                <line
-                  key={index}
-                  x1={from.x}
-                  y1={from.y}
-                  x2={to.x}
-                  y2={to.y}
-                  stroke={isCyber ? "url(#cyber-board-gradient)" : theme.boardLineColor}
-                  strokeWidth={isCyber ? 8 : theme.lineWidth}
-                  strokeLinecap="round"
-                  filter={isCyber ? "url(#neon-glow-line)" : undefined}
-                  className={isCyber ? "neon-line" : ""}
-                />
-              );
-            })}
+            <g
+              className={isCyber ? "neon-group" : ""}
+              filter={isCyber ? "url(#neon-glow)" : undefined}
+            >
+              {LINES.map((line, index) => {
+                const from = getCoords(line.from);
+                const to = getCoords(line.to);
+
+                return (
+                  <line
+                    key={index}
+                    x1={from.x}
+                    y1={from.y}
+                    x2={to.x}
+                    y2={to.y}
+                    stroke={isCyber ? "url(#cyber-board-gradient)" : theme.boardLineColor}
+                    strokeWidth={isCyber ? 8 : theme.lineWidth}
+                    strokeLinecap="round"
+                    style={{ transition: 'all 0.3s ease' }}
+                  />
+                );
+              })}
+            </g>
           </svg>
 
           {Array.from({ length: 24 }, (_, position) => {
             const coords = getCoords(position);
+            const isCyber = theme.id === 'dark';
             return (
               <div
                 key={`node-${position}`}
@@ -201,16 +219,14 @@ export function MorrisBoard({
                 style={{
                   left: coords.x,
                   top: coords.y,
-                  width: 12,
-                  height: 12,
+                  width: isCyber ? 12 : 12,
+                  height: isCyber ? 12 : 12,
                   zIndex: 5,
                 }}
               >
                 <div
-                  className="rounded-full"
+                  className={`rounded-full ${isCyber ? 'w-2 h-2' : 'w-2 h-2'}`}
                   style={{
-                    width: '8px',
-                    height: '8px',
                     backgroundColor: isCyber ? '#fff' : theme.nodeInnerColor,
                     boxShadow: isCyber ? '0 0 10px #fff, 0 0 20px rgba(255,255,255,0.4)' : 'none',
                     opacity: 1
@@ -285,7 +301,7 @@ export function MorrisBoard({
           })}
         </div>
       </div>
-    </div>
+    </div >
   );
 }
 

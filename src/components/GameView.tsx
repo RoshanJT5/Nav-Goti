@@ -265,7 +265,7 @@ export function GameView({
           />
 
           <div className="relative group">
-            <div className="absolute -inset-4 bg-gradient-to-r from-white/5 to-white/0 rounded-3xl blur-2xl opacity-50 group-hover:opacity-100 transition-opacity duration-500" />
+            <div className="absolute -inset-4 bg-linear-to-r from-white/5 to-white/0 rounded-3xl blur-2xl opacity-50 group-hover:opacity-100 transition-opacity duration-500" />
             <MorrisBoard
               gameState={gameState}
               onPositionClick={handlePositionClick}
@@ -284,7 +284,7 @@ export function GameView({
                 className="flex-1 flex items-center justify-center gap-2 h-12 font-black uppercase tracking-tighter rounded-xl transition-all duration-300 hover:scale-[1.02] active:scale-95 group relative overflow-hidden"
                 style={{ color: theme.textColor, backgroundColor: theme.isDark ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.05)' }}
               >
-                <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/5 to-transparent -translate-x-full group-hover:translate-x-full transition-transform duration-1000" />
+                <div className="absolute inset-0 bg-linear-to-r from-transparent via-white/5 to-transparent -translate-x-full group-hover:translate-x-full transition-transform duration-1000" />
                 <Sparkles className="w-5 h-5 text-yellow-400 group-hover:rotate-12 transition-transform" />
                 New Game
               </Button>
