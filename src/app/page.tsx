@@ -318,11 +318,29 @@ export default function Home() {
               </button>
             </nav>
 
+            {/* Download APK Button - Always visible */}
+            <a
+              href="/nav-goti.apk"
+              download="nav-goti.apk"
+              className="inline-flex"
+            >
+              <Button
+                variant="outline"
+                className="flex items-center gap-2 border-green-500/50 text-green-500 hover:bg-green-500/10"
+                style={{ backgroundColor: theme.cardBg }}
+              >
+                <Download className="w-4 h-4" />
+                <span className="hidden sm:inline">Download APK</span>
+                <span className="sm:hidden">APK</span>
+              </Button>
+            </a>
+
+            {/* Install PWA Button - Only shows when installable */}
             {isInstallable && (
               <Button
                 onClick={installApp}
                 variant="outline"
-                className="mr-2 flex items-center gap-2 border-green-500/50 text-green-500 hover:bg-green-500/10"
+                className="flex items-center gap-2 border-blue-500/50 text-blue-500 hover:bg-blue-500/10"
                 style={{ backgroundColor: theme.cardBg }}
               >
                 <Download className="w-4 h-4" />

@@ -776,39 +776,80 @@ export function OnlineGameView({ roomId, onBack, profile }: OnlineGameViewProps)
         <>
           {/* Top Player Bar (Opponent - Black) */}
           <div
-            className="border-b px-3 py-2 flex items-center justify-between transition-all shrink-0"
+            className="border-b px-3 py-3 flex items-center justify-between transition-all shrink-0"
             style={{
               backgroundColor: theme.cardBg,
               borderColor: theme.boardLineColor + '20',
-              opacity: gameState.currentPlayer === 'black' ? 1 : 0.6
+              borderLeftWidth: gameState.currentPlayer === 'black' ? '4px' : '0px',
+              borderLeftColor: gameState.currentPlayer === 'black' ? theme.accentColor : 'transparent',
             }}
           >
-            <div className="flex items-center gap-2 flex-1 min-w-0">
+            <div className="flex items-center gap-3 flex-1 min-w-0">
               <div
-                className="w-8 h-8 rounded-full border-2 shadow-sm flex items-center justify-center text-[10px] shrink-0"
+                className="w-10 h-10 rounded-full border-2 shadow-lg flex items-center justify-center text-xs shrink-0 transition-all"
                 style={{
                   background: theme.blackPiece.bg,
-                  borderColor: theme.blackPiece.border,
-                  color: theme.blackPiece.color
+                  borderColor: gameState.currentPlayer === 'black' ? theme.accentColor : theme.blackPiece.border,
+                  borderWidth: gameState.currentPlayer === 'black' ? '3px' : '2px',
+                  color: theme.blackPiece.color,
+                  boxShadow: gameState.currentPlayer === 'black' ? `0 0 20px ${theme.accentColor}` : '0 4px 8px rgba(0,0,0,0.3)'
                 }}
               >
                 {theme.blackPiece.content}
               </div>
               <div className="flex-1 min-w-0">
-                <div className="font-bold text-sm truncate" style={{ color: theme.textColor }}>{blackName}</div>
-                <div className="text-xs opacity-60 truncate" style={{ color: theme.textColor }}>
-                  {TOTAL_PIECES - gameState.blackPiecesPlaced} to place, {gameState.blackPiecesOnBoard} on board
+                <div 
+                  className="text-sm truncate transition-all"
+                  style={{ 
+                    color: gameState.currentPlayer === 'black' ? theme.accentColor : theme.textColor,
+                    fontWeight: gameState.currentPlayer === 'black' ? '800' : '600',
+                    fontSize: gameState.currentPlayer === 'black' ? '0.95rem' : '0.875rem'
+                  }}
+                >
+                  {blackName}
+                </div>
+                <div className="text-[11px] opacity-70 truncate" style={{ color: theme.textColor }}>
+                  {TOTAL_PIECES - gameState.blackPiecesPlaced} to place • {gameState.blackPiecesOnBoard} on board
                 </div>
               </div>
             </div>
             {gameState.currentPlayer === 'black' && (
-              <div className="w-2 h-2 rounded-full bg-green-500 animate-pulse shrink-0"></div>
+              <div className="flex items-center gap-1.5 shrink-0">
+                <span className="text-[10px] font-bold uppercase tracking-wide" style={{ color: theme.accentColor }}>
+                  {playerColor === 'black' ? 'Your turn' : 'Their turn'}
+                </span>
+                <div 
+                  className="w-2.5 h-2.5 rounded-full animate-pulse shrink-0"
+                  style={{ backgroundColor: theme.accentColor }}
+                />
+              </div>
             )}
           </div>
 
           {/* Board Container */}
-          <div className="flex-1 flex items-center justify-center p-2 overflow-hidden">
-            <div className="flex flex-col items-center gap-2 w-full max-w-[min(100vw-1rem,500px)]">
+          <div className="flex-1 flex flex-col items-center justify-center p-2 overflow-hidden">
+            {/* Status Message - Above Board */}
+            <div
+              className="px-4 py-1.5 rounded-full text-xs font-bold shadow-md mb-2"
+              style={{
+                backgroundColor: gameState.mustRemove
+                  ? '#ef444420'
+                  : gameState.phase === 'gameOver'
+                  ? theme.accentColor
+                  : theme.accentColor + '15',
+                color: gameState.mustRemove
+                  ? '#ef4444'
+                  : gameState.phase === 'gameOver'
+                  ? '#fff'
+                  : theme.textColor,
+                border: `1px solid ${gameState.mustRemove ? '#ef4444' : theme.accentColor}40`
+              }}
+            >
+              {getStatusMessage()}
+            </div>
+
+            {/* Board */}
+            <div className="w-full max-w-[min(100vw-1rem,500px)]">
               <MorrisBoard
                 gameState={gameState}
                 onPositionClick={handlePositionClick}
@@ -816,57 +857,58 @@ export function OnlineGameView({ roomId, onBack, profile }: OnlineGameViewProps)
                 flipped={playerColor === 'black'}
                 themeId={profile?.theme_id}
               />
-
-              {/* Status Message */}
-              <div
-                className="px-4 py-2 rounded-full text-sm font-bold shadow-lg"
-                style={{
-                  backgroundColor: gameState.mustRemove
-                    ? '#ef444420'
-                    : gameState.phase === 'gameOver'
-                      ? theme.accentColor
-                      : theme.accentColor + '20',
-                  color: gameState.mustRemove
-                    ? '#ef4444'
-                    : gameState.phase === 'gameOver'
-                      ? '#fff'
-                      : theme.textColor
-                }}
-              >
-                {getStatusMessage()}
-              </div>
             </div>
           </div>
 
           {/* Bottom Player Bar (You - White) */}
           <div
-            className="border-t px-3 py-2 flex items-center justify-between transition-all shrink-0"
+            className="border-t px-3 py-3 flex items-center justify-between transition-all shrink-0"
             style={{
               backgroundColor: theme.cardBg,
               borderColor: theme.boardLineColor + '20',
-              opacity: gameState.currentPlayer === 'white' ? 1 : 0.6
+              borderLeftWidth: gameState.currentPlayer === 'white' ? '4px' : '0px',
+              borderLeftColor: gameState.currentPlayer === 'white' ? theme.accentColor : 'transparent',
             }}
           >
-            <div className="flex items-center gap-2 flex-1 min-w-0">
+            <div className="flex items-center gap-3 flex-1 min-w-0">
               <div
-                className="w-8 h-8 rounded-full border-2 shadow-sm flex items-center justify-center text-[10px] shrink-0"
+                className="w-10 h-10 rounded-full border-2 shadow-lg flex items-center justify-center text-xs shrink-0 transition-all"
                 style={{
                   background: theme.whitePiece.bg,
-                  borderColor: theme.whitePiece.border,
-                  color: theme.whitePiece.color
+                  borderColor: gameState.currentPlayer === 'white' ? theme.accentColor : theme.whitePiece.border,
+                  borderWidth: gameState.currentPlayer === 'white' ? '3px' : '2px',
+                  color: theme.whitePiece.color,
+                  boxShadow: gameState.currentPlayer === 'white' ? `0 0 20px ${theme.accentColor}` : '0 4px 8px rgba(0,0,0,0.3)'
                 }}
               >
                 {theme.whitePiece.content}
               </div>
               <div className="flex-1 min-w-0">
-                <div className="font-bold text-sm truncate" style={{ color: theme.textColor }}>{whiteName}</div>
-                <div className="text-xs opacity-60 truncate" style={{ color: theme.textColor }}>
-                  {TOTAL_PIECES - gameState.whitePiecesPlaced} to place, {gameState.whitePiecesOnBoard} on board
+                <div 
+                  className="text-sm truncate transition-all"
+                  style={{ 
+                    color: gameState.currentPlayer === 'white' ? theme.accentColor : theme.textColor,
+                    fontWeight: gameState.currentPlayer === 'white' ? '800' : '600',
+                    fontSize: gameState.currentPlayer === 'white' ? '0.95rem' : '0.875rem'
+                  }}
+                >
+                  {whiteName}
+                </div>
+                <div className="text-[11px] opacity-70 truncate" style={{ color: theme.textColor }}>
+                  {TOTAL_PIECES - gameState.whitePiecesPlaced} to place • {gameState.whitePiecesOnBoard} on board
                 </div>
               </div>
             </div>
             {gameState.currentPlayer === 'white' && (
-              <div className="w-2 h-2 rounded-full bg-green-500 animate-pulse shrink-0"></div>
+              <div className="flex items-center gap-1.5 shrink-0">
+                <span className="text-[10px] font-bold uppercase tracking-wide" style={{ color: theme.accentColor }}>
+                  {playerColor === 'white' ? 'Your turn' : 'Their turn'}
+                </span>
+                <div 
+                  className="w-2.5 h-2.5 rounded-full animate-pulse shrink-0"
+                  style={{ backgroundColor: theme.accentColor }}
+                />
+              </div>
             )}
           </div>
 
@@ -913,7 +955,7 @@ export function OnlineGameView({ roomId, onBack, profile }: OnlineGameViewProps)
             )}
           </div>
 
-          {/* Integrated Chat - Bottom Right Corner */}
+          {/* Integrated Chat - Always Visible at Bottom */}
           {roomStatus !== 'loading' && roomStatus !== 'error' && (
             <GameChat
               roomId={roomId}
