@@ -3,7 +3,6 @@
 import { useState, useEffect, useCallback, useRef } from "react";
 import { motion } from "framer-motion";
 import { MorrisBoard } from "@/components/MorrisBoard";
-import { GameInfoPanel } from "@/components/PlayerPanel";
 import {
   GameState,
   Position,
@@ -14,16 +13,13 @@ import {
   removePiece,
   getValidMoves,
   Player,
+  TOTAL_PIECES,
 } from "@/lib/morris-game";
 import { supabase, GameStateJSON } from "@/lib/supabase";
 import { Profile } from "@/hooks/use-profile";
 import { Button } from "@/components/ui/button";
 import {
-  RotateCcw,
-  ChevronLeft,
-  ChevronRight,
   Home,
-  Trophy,
   Copy,
   Check,
   Loader2,
@@ -709,94 +705,110 @@ export function OnlineGameView({ roomId, onBack, profile }: OnlineGameViewProps)
   };
 
   return (
-    <div className="min-h-screen flex flex-col transition-colors duration-500" style={{ backgroundColor: theme.appBackground }}>
-      <header className="border-b px-4 py-2" style={{ backgroundColor: theme.headerBg, borderColor: theme.lineColor + '20' }}>
-        <div className="max-w-7xl mx-auto flex items-center justify-between">
+    <div
+      className="h-screen flex flex-col overflow-hidden transition-colors duration-500"
+      style={{ backgroundColor: theme.appBackground }}
+    >
+      {/* Compact Header */}
+      <header
+        className="border-b px-3 py-2 transition-colors duration-500 shrink-0"
+        style={{ backgroundColor: theme.headerBg, borderColor: theme.boardLineColor + '20' }}
+      >
+        <div className="flex items-center justify-between">
           <button
             onClick={onBack}
             className="flex items-center gap-2 hover:opacity-80 transition-colors"
-            style={{ color: theme.textColor + '80' }}
+            style={{ color: theme.textColor }}
           >
             <Home className="w-5 h-5" />
-            <span className="font-semibold">Nav Goti</span>
+            <span className="font-bold text-sm hidden sm:inline" style={{ color: theme.titleColor }}>Nav Goti</span>
           </button>
-          <div className="flex items-center gap-4">
-            <div className="flex items-center gap-2">
-              <span className="text-sm opacity-60" style={{ color: theme.textColor }}>Room:</span>
-              <code className="px-2 py-1 rounded text-sm font-mono" style={{ backgroundColor: theme.cardBg, color: theme.textColor }}>
-                {roomId}
-              </code>
-              <Button
-                size="icon"
-                variant="ghost"
-                onClick={copyRoomCode}
-                className="h-8 w-8"
-                style={{ color: theme.textColor + '60' }}
-              >
-                {copied ? <Check className="w-4 h-4 text-green-500" /> : <Copy className="w-4 h-4" />}
-              </Button>
-            </div>
-            {playerColor && (
-              <div className="flex items-center gap-2">
-                <span className="text-sm opacity-60" style={{ color: theme.textColor }}>You:</span>
-                <div
-                  className="w-5 h-5 rounded-full border-2 shadow-sm flex items-center justify-center text-[8px]"
-                  style={{
-                    background: playerColor === 'white' ? theme.whitePiece.bg : theme.blackPiece.bg,
-                    borderColor: playerColor === 'white' ? theme.whitePiece.border : theme.blackPiece.border,
-                    color: playerColor === 'white' ? theme.whitePiece.color : theme.blackPiece.color
-                  }}
-                >
-                  {playerColor === 'white' ? theme.whitePiece.content : theme.blackPiece.content}
-                </div>
-              </div>
-            )}
+          <div className="flex items-center gap-2 text-xs">
+            <code className="px-2 py-1 rounded font-mono" style={{ backgroundColor: theme.cardBg, color: theme.textColor }}>
+              {roomId}
+            </code>
+            <Button
+              size="icon"
+              variant="ghost"
+              onClick={copyRoomCode}
+              className="h-7 w-7"
+            >
+              {copied ? <Check className="w-3 h-3 text-green-500" /> : <Copy className="w-3 h-3" style={{ color: theme.textColor }} />}
+            </Button>
           </div>
         </div>
       </header>
 
-      <main className="flex-1 flex flex-col lg:flex-row items-center lg:items-start justify-center gap-6 lg:gap-8 p-3 lg:p-4 pt-6 lg:pt-8 overflow-x-hidden">
-        <div className="flex flex-col items-center gap-6">
-          {roomStatus === 'waiting' ? (
-            <motion.div
-              initial={{ opacity: 0, scale: 0.95 }}
-              animate={{ opacity: 1, scale: 1 }}
-              className="rounded-xl p-8 text-center max-w-md border-2"
-              style={{ backgroundColor: theme.cardBg, borderColor: theme.lineColor + '10' }}
-            >
-              <div className="w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-4 shadow-lg" style={{ backgroundColor: theme.accentColor }}>
-                <Users className="w-8 h-8 text-white" />
+      {roomStatus === 'waiting' ? (
+        <div className="flex-1 flex items-center justify-center p-4">
+          <motion.div
+            initial={{ opacity: 0, scale: 0.95 }}
+            animate={{ opacity: 1, scale: 1 }}
+            className="rounded-xl p-8 text-center max-w-md border-2"
+            style={{ backgroundColor: theme.cardBg, borderColor: theme.lineColor + '10' }}
+          >
+            <div className="w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-4 shadow-lg" style={{ backgroundColor: theme.accentColor }}>
+              <Users className="w-8 h-8 text-white" />
+            </div>
+            <h2 className="text-2xl font-bold mb-2" style={{ color: theme.textColor }}>Waiting for Opponent</h2>
+            <p className="opacity-60 mb-4" style={{ color: theme.textColor }}>Share this room code:</p>
+            <div className="flex items-center justify-center gap-2 mb-6">
+              <code className="px-6 py-3 rounded-lg text-3xl font-mono shadow-inner" style={{ backgroundColor: theme.appBackground, color: theme.textColor }}>
+                {roomId}
+              </code>
+              <Button
+                size="icon"
+                variant="outline"
+                onClick={copyRoomCode}
+                className="h-12 w-12"
+                style={{ borderColor: theme.lineColor + '20' }}
+              >
+                {copied ? <Check className="w-6 h-6 text-green-500" /> : <Copy className="w-6 h-6" style={{ color: theme.textColor }} />}
+              </Button>
+            </div>
+            <div className="flex items-center justify-center gap-3 opacity-60" style={{ color: theme.textColor }}>
+              <Loader2 className="w-5 h-5 animate-spin" />
+              <span>Waiting for player...</span>
+            </div>
+          </motion.div>
+        </div>
+      ) : (
+        <>
+          {/* Top Player Bar (Opponent - Black) */}
+          <div
+            className="border-b px-3 py-2 flex items-center justify-between transition-all shrink-0"
+            style={{
+              backgroundColor: theme.cardBg,
+              borderColor: theme.boardLineColor + '20',
+              opacity: gameState.currentPlayer === 'black' ? 1 : 0.6
+            }}
+          >
+            <div className="flex items-center gap-2 flex-1 min-w-0">
+              <div
+                className="w-8 h-8 rounded-full border-2 shadow-sm flex items-center justify-center text-[10px] shrink-0"
+                style={{
+                  background: theme.blackPiece.bg,
+                  borderColor: theme.blackPiece.border,
+                  color: theme.blackPiece.color
+                }}
+              >
+                {theme.blackPiece.content}
               </div>
-              <h2 className="text-2xl font-bold mb-2" style={{ color: theme.textColor }}>Waiting for Opponent</h2>
-              <p className="opacity-60 mb-4" style={{ color: theme.textColor }}>Share this room code with a friend:</p>
-              <div className="flex items-center justify-center gap-2 mb-6">
-                <code className="px-6 py-3 rounded-lg text-3xl font-mono shadow-inner" style={{ backgroundColor: theme.appBackground, color: theme.textColor }}>
-                  {roomId}
-                </code>
-                <Button
-                  size="icon"
-                  variant="outline"
-                  onClick={copyRoomCode}
-                  className="h-12 w-12"
-                  style={{ borderColor: theme.lineColor + '20' }}
-                >
-                  {copied ? <Check className="w-6 h-6 text-green-500" /> : <Copy className="w-6 h-6" style={{ color: theme.textColor }} />}
-                </Button>
+              <div className="flex-1 min-w-0">
+                <div className="font-bold text-sm truncate" style={{ color: theme.textColor }}>{blackName}</div>
+                <div className="text-xs opacity-60 truncate" style={{ color: theme.textColor }}>
+                  {TOTAL_PIECES - gameState.blackPiecesPlaced} to place, {gameState.blackPiecesOnBoard} on board
+                </div>
               </div>
-              <div className="flex items-center justify-center gap-3 opacity-60" style={{ color: theme.textColor }}>
-                <Loader2 className="w-5 h-5 animate-spin" />
-                <span>Waiting for player...</span>
-              </div>
-            </motion.div>
-          ) : (
-            <>
-              <GameInfoPanel
-                gameState={gameState}
-                whiteName={whiteName}
-                blackName={blackName}
-                themeId={profile?.theme_id}
-              />
+            </div>
+            {gameState.currentPlayer === 'black' && (
+              <div className="w-2 h-2 rounded-full bg-green-500 animate-pulse shrink-0"></div>
+            )}
+          </div>
 
+          {/* Board Container */}
+          <div className="flex-1 flex items-center justify-center p-2 overflow-hidden">
+            <div className="flex flex-col items-center gap-2 w-full max-w-[min(100vw-1rem,500px)]">
               <MorrisBoard
                 gameState={gameState}
                 onPositionClick={handlePositionClick}
@@ -804,159 +816,113 @@ export function OnlineGameView({ roomId, onBack, profile }: OnlineGameViewProps)
                 flipped={playerColor === 'black'}
                 themeId={profile?.theme_id}
               />
-            </>
-          )}
-        </div>
 
-        {roomStatus !== 'waiting' && (
-          <div className="w-full max-w-sm lg:w-80">
-            <div
-              className="rounded-xl p-4 shadow-xl border overflow-hidden"
-              style={{
-                backgroundColor: theme.cardBg,
-                borderColor: theme.scoreboardGradient ? 'transparent' : theme.lineColor + '20',
-                borderImageSource: theme.scoreboardGradient,
-                borderImageSlice: 1,
-                borderWidth: theme.scoreboardGradient ? '1px' : '0px'
-              }}
-            >
-              <h3
-                className="font-semibold mb-4 text-center"
-                style={theme.scoreboardGradient ? {
-                  backgroundImage: theme.scoreboardGradient,
-                  WebkitBackgroundClip: 'text',
-                  WebkitTextFillColor: 'transparent',
-                  fontWeight: '800',
-                  fontSize: '1.25rem'
-                } : { color: theme.textColor }}
-              >
-                Game Status
-              </h3>
+              {/* Status Message */}
               <div
-                className="p-4 rounded-xl text-center font-bold text-lg shadow-inner"
+                className="px-4 py-2 rounded-full text-sm font-bold shadow-lg"
                 style={{
-                  background: gameState.phase === 'gameOver'
-                    ? theme.scoreboardGradient || theme.accentColor
-                    : theme.scoreboardGradient
-                      ? `linear-gradient(to right, ${theme.cardBg}, ${theme.cardBg}) padding-box, ${theme.scoreboardGradient} border-box`
-                      : isPlayerTurn
-                        ? theme.accentColor + '20'
-                        : theme.lineColor + '10',
-                  color: gameState.phase === 'gameOver' ? '#fff' : theme.textColor,
-                  border: theme.scoreboardGradient ? '2px solid transparent' : 'none',
-                  boxShadow: theme.scoreboardGradient ? '0 0 15px rgba(34, 197, 94, 0.2)' : 'none'
+                  backgroundColor: gameState.mustRemove
+                    ? '#ef444420'
+                    : gameState.phase === 'gameOver'
+                      ? theme.accentColor
+                      : theme.accentColor + '20',
+                  color: gameState.mustRemove
+                    ? '#ef4444'
+                    : gameState.phase === 'gameOver'
+                      ? '#fff'
+                      : theme.textColor
                 }}
               >
                 {getStatusMessage()}
               </div>
-
-              <div className="mt-6 space-y-3">
-                <div className="flex justify-between text-sm">
-                  <span className="opacity-60 font-medium" style={{ color: theme.textColor }}>Phase</span>
-                  <span className="font-bold capitalize" style={{ color: theme.textColor }}>{gameState.phase}</span>
-                </div>
-                <div className="flex justify-between text-sm">
-                  <span className="opacity-60 font-medium" style={{ color: theme.textColor }}>Your Color</span>
-                  <span className="font-bold capitalize" style={{ color: theme.textColor }}>{playerColor}</span>
-                </div>
-                <div className="flex justify-between text-sm">
-                  <span className="opacity-60 font-medium" style={{ color: theme.textColor }}>Opponent</span>
-                  <span className="font-bold" style={{ color: opponentConnected ? theme.accentColor : opponentDisconnected ? '#ef4444' : '#e5a02b' }}>
-                    {opponentConnected ? 'Connected' : opponentDisconnected ? 'Disconnected' : 'Waiting...'}
-                  </span>
-                </div>
-              </div>
-
-              {gameState.phase === 'gameOver' && (
-                <div className="mt-6 space-y-3">
-                  {/* Only show Play Again if opponent is still connected */}
-                  {!opponentDisconnected && (
-                    <Button
-                      onClick={handlePlayAgain}
-                      className="w-full h-12 font-bold"
-                      style={{ backgroundColor: theme.accentColor, color: '#fff' }}
-                    >
-                      <RefreshCw className="w-5 h-5 mr-2" />
-                      Play Again
-                    </Button>
-                  )}
-                  {opponentDisconnected && (
-                    <div className="text-center py-3 rounded-lg mb-2" style={{ backgroundColor: '#ef444420', color: '#ef4444' }}>
-                      <p className="font-medium">Opponent left the game</p>
-                      <p className="text-sm opacity-80">Victory by forfeit!</p>
-                    </div>
-                  )}
-                  <Button
-                    variant="outline"
-                    onClick={onBack}
-                    className="w-full h-12"
-                    style={{ borderColor: theme.lineColor + '20', color: theme.textColor }}
-                  >
-                    <Home className="w-5 h-5 mr-2" />
-                    {opponentDisconnected ? 'Find New Game' : 'Back to Menu'}
-                  </Button>
-                </div>
-              )}
-            </div>
-
-            <div
-              className="rounded-xl p-4 mt-4 shadow-lg border overflow-hidden"
-              style={{
-                backgroundColor: theme.cardBg,
-                borderColor: theme.scoreboardGradient ? 'transparent' : theme.lineColor + '20',
-                borderImageSource: theme.scoreboardGradient,
-                borderImageSlice: 1,
-                borderWidth: theme.scoreboardGradient ? '1px' : '0px'
-              }}
-            >
-              <h3
-                className="font-semibold mb-4 text-center"
-                style={theme.scoreboardGradient ? {
-                  backgroundImage: theme.scoreboardGradient,
-                  WebkitBackgroundClip: 'text',
-                  WebkitTextFillColor: 'transparent',
-                  fontWeight: '800'
-                } : { color: theme.textColor }}
-              >
-                Players
-              </h3>
-              <div className="space-y-4">
-                <div className="flex items-center gap-3">
-                  <div
-                    className="w-8 h-8 rounded-full border shadow-sm flex items-center justify-center text-[10px]"
-                    style={{ background: theme.whitePiece.bg, borderColor: theme.whitePiece.border, color: theme.whitePiece.color }}
-                  >
-                    {theme.whitePiece.content}
-                  </div>
-                  <span className="text-sm font-medium flex-1 truncate" style={{ color: theme.textColor }}>{whiteName}</span>
-                  {playerColor === 'white' && (
-                    <span className="text-[10px] text-white px-2 py-0.5 rounded-full font-bold shadow-sm" style={{ backgroundColor: theme.accentColor }}>You</span>
-                  )}
-                </div>
-                <div className="flex items-center gap-3">
-                  <div
-                    className="w-8 h-8 rounded-full border shadow-sm flex items-center justify-center text-[10px]"
-                    style={{ background: theme.blackPiece.bg, borderColor: theme.blackPiece.border, color: theme.blackPiece.color }}
-                  >
-                    {theme.blackPiece.content}
-                  </div>
-                  <span className="text-sm font-medium flex-1 truncate" style={{ color: theme.textColor }}>{blackName}</span>
-                  {playerColor === 'black' && (
-                    <span className="text-[10px] text-white px-2 py-0.5 rounded-full font-bold shadow-sm" style={{ backgroundColor: theme.accentColor }}>You</span>
-                  )}
-                </div>
-              </div>
             </div>
           </div>
-        )}
-      </main>
-      {roomStatus !== 'loading' && roomStatus !== 'error' && (
-        <GameChat
-          roomId={roomId}
-          playerId={playerId}
-          playerName={playerName}
-          themeId={profile?.theme_id}
-        />
+
+          {/* Bottom Player Bar (You - White) */}
+          <div
+            className="border-t px-3 py-2 flex items-center justify-between transition-all shrink-0"
+            style={{
+              backgroundColor: theme.cardBg,
+              borderColor: theme.boardLineColor + '20',
+              opacity: gameState.currentPlayer === 'white' ? 1 : 0.6
+            }}
+          >
+            <div className="flex items-center gap-2 flex-1 min-w-0">
+              <div
+                className="w-8 h-8 rounded-full border-2 shadow-sm flex items-center justify-center text-[10px] shrink-0"
+                style={{
+                  background: theme.whitePiece.bg,
+                  borderColor: theme.whitePiece.border,
+                  color: theme.whitePiece.color
+                }}
+              >
+                {theme.whitePiece.content}
+              </div>
+              <div className="flex-1 min-w-0">
+                <div className="font-bold text-sm truncate" style={{ color: theme.textColor }}>{whiteName}</div>
+                <div className="text-xs opacity-60 truncate" style={{ color: theme.textColor }}>
+                  {TOTAL_PIECES - gameState.whitePiecesPlaced} to place, {gameState.whitePiecesOnBoard} on board
+                </div>
+              </div>
+            </div>
+            {gameState.currentPlayer === 'white' && (
+              <div className="w-2 h-2 rounded-full bg-green-500 animate-pulse shrink-0"></div>
+            )}
+          </div>
+
+          {/* Bottom Action Bar */}
+          <div
+            className="border-t px-3 py-2 flex items-center justify-between gap-2 shrink-0"
+            style={{ backgroundColor: theme.headerBg, borderColor: theme.boardLineColor + '20' }}
+          >
+            {gameState.phase === 'gameOver' ? (
+              <div className="flex gap-2 w-full">
+                {!opponentDisconnected && (
+                  <Button
+                    onClick={handlePlayAgain}
+                    className="flex-1 h-10 font-bold text-sm"
+                    style={{ backgroundColor: theme.accentColor, color: '#fff' }}
+                  >
+                    <RefreshCw className="w-4 h-4 mr-1" />
+                    Play Again
+                  </Button>
+                )}
+                <Button
+                  variant="outline"
+                  onClick={onBack}
+                  className="flex-1 h-10 text-sm"
+                  style={{ borderColor: theme.lineColor + '20', color: theme.textColor }}
+                >
+                  <Home className="w-4 h-4 mr-1" />
+                  {opponentDisconnected ? 'New Game' : 'Menu'}
+                </Button>
+              </div>
+            ) : (
+              <>
+                <div className="flex items-center gap-2 text-xs" style={{ color: theme.textColor }}>
+                  <span className="opacity-60">Phase:</span>
+                  <span className="font-bold capitalize">{gameState.phase}</span>
+                </div>
+                <div className="flex items-center gap-2 text-xs">
+                  <span className="opacity-60" style={{ color: theme.textColor }}>Status:</span>
+                  <span className="font-bold" style={{ color: opponentConnected ? theme.accentColor : '#ef4444' }}>
+                    {opponentConnected ? 'Connected' : 'Disconnected'}
+                  </span>
+                </div>
+              </>
+            )}
+          </div>
+
+          {/* Integrated Chat - Bottom Right Corner */}
+          {roomStatus !== 'loading' && roomStatus !== 'error' && (
+            <GameChat
+              roomId={roomId}
+              playerId={playerId}
+              playerName={playerName}
+              themeId={profile?.theme_id}
+            />
+          )}
+        </>
       )}
     </div>
   );
