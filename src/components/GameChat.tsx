@@ -161,18 +161,22 @@ export function GameChat({ roomId, playerId, playerName, themeId = 'classic' }: 
     }
   };
 
-  // Get panel height based on state
-  const getPanelHeight = () => {
+  // Get panel transform based on state
+  const getPanelTransform = () => {
     switch (panelState) {
       case 'closed':
-        return '0px';
+        return 'translateY(calc(100% - 50px))'; // Show only handle (50px)
       case 'peek':
-        return '180px';
+        return 'translateY(calc(100% - 230px))'; // Show handle + preview (230px)
       case 'full':
-        return 'calc(100vh - 120px)';
+        return 'translateY(0)'; // Show full panel
       default:
-        return '0px';
+        return 'translateY(calc(100% - 50px))';
     }
+  };
+
+  const getPanelHeight = () => {
+    return 'calc(100vh - 100px)'; // Fixed height, always same
   };
 
   return (
@@ -185,26 +189,30 @@ export function GameChat({ roomId, playerId, playerName, themeId = 'classic' }: 
         />
       )}
 
-      {/* Chat Panel */}
+      {/* Chat Panel - Always shows handle */}
       <div
         ref={panelRef}
         className="fixed bottom-0 left-0 right-0 z-50 transition-all duration-300 ease-out"
         style={{
           height: getPanelHeight(),
+          transform: getPanelTransform(),
           backgroundColor: theme.cardBg,
           borderTopLeftRadius: '16px',
           borderTopRightRadius: '16px',
           boxShadow: '0 -4px 20px rgba(0,0,0,0.3)',
         }}
       >
-        {/* Swipe Handle */}
+        {/* Swipe Handle - Always Visible */}
         <div
-          className="w-full py-2 cursor-pointer flex flex-col items-center"
+          className="w-full py-3 cursor-pointer flex flex-col items-center border-b shrink-0"
           onClick={togglePanel}
           onTouchStart={handleTouchStart}
           onTouchMove={handleTouchMove}
           onTouchEnd={handleTouchEnd}
-          style={{ backgroundColor: theme.headerBg }}
+          style={{
+            backgroundColor: theme.headerBg,
+            borderColor: theme.lineColor + '10'
+          }}
         >
           <div
             className="w-12 h-1 rounded-full mb-2"
@@ -227,6 +235,7 @@ export function GameChat({ roomId, playerId, playerName, themeId = 'classic' }: 
                 {unreadCount > 9 ? '9+' : unreadCount}
               </span>
             )}
+            {panelState === 'closed' && <ChevronUp className="w-4 h-4" style={{ color: theme.textColor + '60' }} />}
             {panelState === 'peek' && <ChevronUp className="w-4 h-4" style={{ color: theme.textColor }} />}
             {panelState === 'full' && <ChevronDown className="w-4 h-4" style={{ color: theme.textColor }} />}
           </div>
@@ -243,9 +252,9 @@ export function GameChat({ roomId, playerId, playerName, themeId = 'classic' }: 
           )}
         </div>
 
-        {/* Messages Area */}
+        {/* Messages Area - Only visible when not closed */}
         {panelState !== 'closed' && (
-          <div className="flex flex-col h-[calc(100%-60px)]">
+          <div className="flex flex-col h-[calc(100%-50px)]">
             <ScrollArea className="flex-1 px-4 py-2" ref={scrollRef}>
               <div className="space-y-3">
                 {messages.map((msg) => (
@@ -286,7 +295,7 @@ export function GameChat({ roomId, playerId, playerName, themeId = 'classic' }: 
             {/* Input Area */}
             <form
               onSubmit={handleSendMessage}
-              className="p-3 border-t flex gap-2"
+              className="p-3 border-t flex gap-2 shrink-0"
               style={{ backgroundColor: theme.headerBg, borderColor: theme.lineColor + '10' }}
             >
               <Input
