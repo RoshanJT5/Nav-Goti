@@ -272,7 +272,7 @@ export function MorrisBoard({
                     animation: neon-pulse-refined 4s ease-in-out infinite;
                   }
                   .peacock-line {
-                    filter: drop-shadow(0 0 8px #00ffcc) drop-shadow(0 0 2px #00ffcc);
+                    filter: drop-shadow(0 0 8px rgba(255, 215, 0, 0.8));
                   }
                 `}
               </style>
