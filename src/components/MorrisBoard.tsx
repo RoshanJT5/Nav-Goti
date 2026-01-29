@@ -264,13 +264,6 @@ export function MorrisBoard({
 
               <style>
                 {`
-                  @keyframes neon-pulse-refined {
-                    0%, 100% { opacity: 0.8; }
-                    50% { opacity: 1; }
-                  }
-                  .neon-group {
-                    animation: neon-pulse-refined 4s ease-in-out infinite;
-                  }
                   .peacock-line {
                     filter: drop-shadow(0 0 8px rgba(255, 215, 0, 0.8));
                   }
@@ -279,7 +272,6 @@ export function MorrisBoard({
             </defs>
 
             <g
-              className={isCyber || isPeacock ? "neon-group" : ""}
               filter={isCyber ? "url(#neon-glow)" : (isPeacock ? "url(#peacock-glow)" : undefined)}
             >
               {isPeacock ? (
@@ -300,7 +292,6 @@ export function MorrisBoard({
                         strokeWidth="5"
                         rx="12"
                         className="peacock-line"
-                        style={{ transition: 'all 0.3s ease' }}
                       />
                     );
                   })}
