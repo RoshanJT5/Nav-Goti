@@ -168,6 +168,39 @@ CREATE INDEX IF NOT EXISTS idx_game_chat_room ON public.game_chat(room_id);
 CREATE INDEX IF NOT EXISTS idx_game_chat_created ON public.game_chat(created_at);
 
 -- ==========================================
+-- 4.5 DRAW OFFERS TABLE
+-- ==========================================
+CREATE TABLE IF NOT EXISTS public.draw_offers (
+  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  room_id TEXT NOT NULL,
+  offered_by_player_id TEXT NOT NULL,
+  status TEXT DEFAULT 'pending', -- pending, accepted, declined
+  offered_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+  responded_at TIMESTAMP WITH TIME ZONE
+);
+
+-- Enable RLS
+ALTER TABLE IF EXISTS public.draw_offers ENABLE ROW LEVEL SECURITY;
+
+-- Idempotent Policies for draw_offers
+DO $$ BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE tablename = 'draw_offers' AND policyname = 'Anyone can view draw offers') THEN
+    CREATE POLICY "Anyone can view draw offers" ON public.draw_offers FOR SELECT USING (true);
+  END IF;
+
+  IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE tablename = 'draw_offers' AND policyname = 'Anyone can create draw offers') THEN
+    CREATE POLICY "Anyone can create draw offers" ON public.draw_offers FOR INSERT WITH CHECK (true);
+  END IF;
+
+  IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE tablename = 'draw_offers' AND policyname = 'Anyone can update draw offers') THEN
+    CREATE POLICY "Anyone can update draw offers" ON public.draw_offers FOR UPDATE USING (true);
+  END IF;
+END $$;
+
+-- Index for faster queries
+CREATE INDEX IF NOT EXISTS idx_draw_offers_room ON public.draw_offers(room_id);
+
+-- ==========================================
 -- 5. ENABLE REALTIME
 -- ==========================================
 -- Enable realtime for specified tables if not already enabled

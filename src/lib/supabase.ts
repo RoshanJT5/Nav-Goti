@@ -52,4 +52,5 @@ export interface GameStateJSON {
   mustRemove: boolean;
   winner: string | null;
   moveHistory: string[];
+  historyStates?: any[];
 }

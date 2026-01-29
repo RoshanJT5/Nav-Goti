@@ -53,6 +53,28 @@ export function MorrisBoard({
 }: MorrisBoardProps) {
   const theme = getTheme(themeId);
   const isCyber = themeId === 'dark';
+
+  const [scale, setScale] = useState(1);
+  const containerRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const updateScale = () => {
+      if (containerRef.current) {
+        const containerWidth = containerRef.current.offsetWidth;
+        const containerHeight = containerRef.current.offsetHeight;
+        const targetSize = BOARD_SIZE + 60;
+        const scaleW = containerWidth / targetSize;
+        const scaleH = containerHeight / targetSize;
+        const newScale = Math.min(scaleW, scaleH, 1);
+        setScale(newScale);
+      }
+    };
+
+    updateScale();
+    window.addEventListener('resize', updateScale);
+    return () => window.removeEventListener('resize', updateScale);
+  }, []);
+
   const getCoords = (position: Position) => {
     const coords = POSITION_COORDS[position];
     let x = coords.x * CELL_SIZE;
@@ -93,26 +115,52 @@ export function MorrisBoard({
     return validMoves.length > 0;
   };
 
-  const [scale, setScale] = useState(1);
-  const containerRef = useRef<HTMLDivElement>(null);
+  const [isDraggingIndex, setIsDraggingIndex] = useState<number | null>(null);
+  const boardContainerRef = useRef<HTMLDivElement>(null);
 
-  useEffect(() => {
-    const updateScale = () => {
-      if (containerRef.current) {
-        const containerWidth = containerRef.current.offsetWidth;
-        const containerHeight = containerRef.current.offsetHeight;
-        const targetSize = BOARD_SIZE + 60;
-        const scaleW = containerWidth / targetSize;
-        const scaleH = containerHeight / targetSize;
-        const newScale = Math.min(scaleW, scaleH, 1);
-        setScale(newScale);
+  const handleDragStart = (index: number) => {
+    if (disabled || isReviewMode) return;
+    setIsDraggingIndex(index);
+    if (gameState.selectedPiece !== index && isSelectable(index)) {
+      onPositionClick(index);
+    }
+  };
+
+  const handleDragEnd = (event: any, info: any, fromIndex: number) => {
+    setIsDraggingIndex(null);
+    if (disabled || isReviewMode) return;
+
+    const boardElement = boardContainerRef.current;
+    if (!boardElement) return;
+
+    const rect = boardElement.getBoundingClientRect();
+    const dropX = (info.point.x - rect.left) / scale;
+    const dropY = (info.point.y - rect.top) / scale;
+
+    let nearestPos = -1;
+    let minDistance = Infinity;
+    const threshold = 50;
+
+    for (let i = 0; i < 24; i++) {
+      const coords = getCoords(i);
+      const dist = Math.sqrt(Math.pow(dropX - coords.x, 2) + Math.pow(dropY - coords.y, 2));
+      if (dist < minDistance) {
+        minDistance = dist;
+        nearestPos = i;
       }
-    };
+    }
 
-    updateScale();
-    window.addEventListener('resize', updateScale);
-    return () => window.removeEventListener('resize', updateScale);
-  }, []);
+    if (nearestPos !== -1 && minDistance < threshold && nearestPos !== fromIndex) {
+      const validMoves = getValidMoves(gameState, fromIndex);
+      if (validMoves.includes(nearestPos)) {
+        onPositionClick(nearestPos);
+      }
+    }
+  };
+
+  const isReviewMode = gameState.historyStates && gameState.historyStates.length > 0 && !disabled;
+
+  const isPeacock = themeId === 'peacock';
 
   return (
     <div
@@ -120,25 +168,47 @@ export function MorrisBoard({
       className="w-full h-full flex justify-center items-center"
     >
       <div
-        className="relative rounded-2xl shadow-2xl transition-all duration-500"
+        className={`relative transition-all duration-500 flex justify-center items-center ${isPeacock ? '' : 'rounded-2xl shadow-2xl'}`}
         style={{
           width: BOARD_SIZE + 60,
           height: BOARD_SIZE + 60,
-          padding: 30,
-          backgroundColor: theme.id === 'dark' ? '#000000' : theme.boardBorder,
-          boxShadow: theme.id === 'dark'
-            ? '0 0 40px rgba(34, 197, 94, 0.2)'
-            : `0 20px 50px rgba(0,0,0,0.4), inset 0 2px 4px rgba(255,255,255,0.2)`,
+          padding: 0,
+          background: isPeacock
+            ? 'linear-gradient(135deg, rgba(0, 25, 20, 0.95), rgba(0, 10, 10, 0.98))'
+            : (theme.id === 'dark' ? '#000000' : theme.boardBorder),
+          boxShadow: isPeacock
+            ? '0 0 20px rgba(255, 215, 0, 0.4)'
+            : (theme.id === 'dark'
+              ? '0 0 40px rgba(34, 197, 94, 0.2)'
+              : `0 20px 50px rgba(0,0,0,0.4), inset 0 2px 4px rgba(255,255,255,0.2)`),
           transform: `scale(${scale})`,
-          border: theme.id === 'dark' ? '1px solid rgba(34, 197, 94, 0.1)' : 'none',
+          border: isPeacock ? '8px solid #B8860B' : (theme.id === 'dark' ? '1px solid rgba(34, 197, 94, 0.1)' : 'none'),
+          borderRadius: isPeacock ? '16px' : '0',
+          position: 'relative'
         }}
       >
+        {/* Corner Ornaments for Peacock Theme */}
+        {isPeacock && (
+          <>
+            <div className="absolute top-0 left-0 w-8 h-8 border-t-4 border-l-4 border-[#B8860B] rounded-tl-lg -translate-x-1 -translate-y-1" />
+            <div className="absolute top-0 right-0 w-8 h-8 border-t-4 border-r-4 border-[#B8860B] rounded-tr-lg translate-x-1 -translate-y-1" />
+            <div className="absolute bottom-0 left-0 w-8 h-8 border-b-4 border-l-4 border-[#B8860B] rounded-bl-lg -translate-x-1 translate-y-1" />
+            <div className="absolute bottom-0 right-0 w-8 h-8 border-b-4 border-r-4 border-[#B8860B] rounded-br-lg translate-x-1 translate-y-1" />
+          </>
+        )}
+
         <div
-          className="relative rounded-2xl"
+          ref={boardContainerRef}
+          className="relative"
           style={{
             width: BOARD_SIZE,
             height: BOARD_SIZE,
-            backgroundColor: theme.boardBg,
+            background: 'transparent',
+            backgroundImage: isPeacock ? 'none' : (theme.boardImage ? `url(${theme.boardImage})` : undefined),
+            backdropFilter: isPeacock ? 'blur(4px)' : 'none',
+            backgroundSize: 'cover',
+            backgroundPosition: 'center',
+            borderRadius: isPeacock ? '8px' : '0',
           }}
         >
           <svg
@@ -171,6 +241,27 @@ export function MorrisBoard({
                 </feMerge>
               </filter>
 
+              <filter
+                id="peacock-glow"
+                x="-50" y="-50" width={BOARD_SIZE + 100} height={BOARD_SIZE + 100}
+              >
+                {/* Layer 1: Warm Orange Ambient Glow (Replacing Blue) */}
+                <feGaussianBlur in="SourceGraphic" stdDeviation="6" result="blurOrange" />
+                <feFlood floodColor="rgba(255, 100, 0, 0.6)" result="colorOrange" />
+                <feComposite in="colorOrange" in2="blurOrange" operator="in" result="shadowOrange" />
+
+                {/* Layer 2: Bright Gold Immediate Glow */}
+                <feGaussianBlur in="SourceGraphic" stdDeviation="2" result="blurGold" />
+                <feFlood floodColor="#FFD700" result="colorGold" />
+                <feComposite in="colorGold" in2="blurGold" operator="in" result="shadowGold" />
+
+                <feMerge>
+                  <feMergeNode in="shadowOrange" />
+                  <feMergeNode in="shadowGold" />
+                  <feMergeNode in="SourceGraphic" />
+                </feMerge>
+              </filter>
+
               <style>
                 {`
                   @keyframes neon-pulse-refined {
@@ -180,33 +271,94 @@ export function MorrisBoard({
                   .neon-group {
                     animation: neon-pulse-refined 4s ease-in-out infinite;
                   }
+                  .peacock-line {
+                    filter: drop-shadow(0 0 8px #00ffcc) drop-shadow(0 0 2px #00ffcc);
+                  }
                 `}
               </style>
             </defs>
 
             <g
-              className={isCyber ? "neon-group" : ""}
-              filter={isCyber ? "url(#neon-glow)" : undefined}
+              className={isCyber || isPeacock ? "neon-group" : ""}
+              filter={isCyber ? "url(#neon-glow)" : (isPeacock ? "url(#peacock-glow)" : undefined)}
             >
-              {LINES.map((line, index) => {
-                const from = getCoords(line.from);
-                const to = getCoords(line.to);
+              {isPeacock ? (
+                <>
+                  {/* Concentric Squares for Peacock Theme */}
+                  {[0, 1, 2].map((i) => {
+                    const offset = i * CELL_SIZE;
+                    const size = BOARD_SIZE - (i * 2 * CELL_SIZE);
+                    return (
+                      <rect
+                        key={`square-${i}`}
+                        x={offset}
+                        y={offset}
+                        width={size}
+                        height={size}
+                        fill="none"
+                        stroke="#FFD700"
+                        strokeWidth="5"
+                        rx="12"
+                        className="peacock-line"
+                        style={{ transition: 'all 0.3s ease' }}
+                      />
+                    );
+                  })}
+                  {/* Connecting Lines for Peacock Theme */}
+                  {[
+                    { x1: 3 * CELL_SIZE, y1: 0, x2: 3 * CELL_SIZE, y2: 2 * CELL_SIZE },
+                    { x1: 3 * CELL_SIZE, y1: 4 * CELL_SIZE, x2: 3 * CELL_SIZE, y2: 6 * CELL_SIZE },
+                    { x1: 0, y1: 3 * CELL_SIZE, x2: 2 * CELL_SIZE, y2: 3 * CELL_SIZE },
+                    { x1: 4 * CELL_SIZE, y1: 3 * CELL_SIZE, x2: 6 * CELL_SIZE, y2: 3 * CELL_SIZE },
+                  ].map((line, index) => (
+                    <line
+                      key={`connect-${index}`}
+                      {...line}
+                      stroke="#FFD700"
+                      strokeWidth="5"
+                      strokeLinecap="round"
+                      className="peacock-line"
+                    />
+                  ))}
+                </>
+              ) : (
+                LINES.map((line, index) => {
+                  const from = getCoords(line.from);
+                  const to = getCoords(line.to);
 
-                return (
-                  <line
-                    key={index}
-                    x1={from.x}
-                    y1={from.y}
-                    x2={to.x}
-                    y2={to.y}
-                    stroke={isCyber ? "url(#cyber-board-gradient)" : theme.boardLineColor}
-                    strokeWidth={isCyber ? 8 : theme.lineWidth}
-                    strokeLinecap="round"
-                    style={{ transition: 'all 0.3s ease' }}
-                  />
-                );
-              })}
+                  return (
+                    <line
+                      key={index}
+                      x1={from.x}
+                      y1={from.y}
+                      x2={to.x}
+                      y2={to.y}
+                      stroke={isCyber ? "url(#cyber-board-gradient)" : theme.boardLineColor}
+                      strokeWidth={isCyber ? 8 : theme.lineWidth}
+                      strokeLinecap="round"
+                      style={{ transition: 'all 0.3s ease' }}
+                    />
+                  );
+                })
+              )}
             </g>
+
+            {isDraggingIndex !== null && getValidMoves(gameState, isDraggingIndex).map(pos => {
+              const coords = getCoords(pos);
+              return (
+                <circle
+                  key={`drop-zone-${pos}`}
+                  cx={coords.x}
+                  cy={coords.y}
+                  r={15}
+                  fill={isPeacock ? "#00ffcc" : (isCyber ? "#22c55e" : theme.accentColor)}
+                  fillOpacity={0.2}
+                  stroke={isPeacock ? "#00ffcc" : (isCyber ? "#22c55e" : theme.accentColor)}
+                  strokeWidth={2}
+                  strokeDasharray="4 2"
+                />
+              );
+            })}
           </svg>
 
           {Array.from({ length: 24 }, (_, position) => {
@@ -219,16 +371,17 @@ export function MorrisBoard({
                 style={{
                   left: coords.x,
                   top: coords.y,
-                  width: isCyber ? 12 : 12,
-                  height: isCyber ? 12 : 12,
+                  width: 12,
+                  height: 12,
                   zIndex: 5,
                 }}
               >
                 <div
-                  className={`rounded-full ${isCyber ? 'w-2 h-2' : 'w-2 h-2'}`}
+                  className="rounded-full w-2 h-2"
                   style={{
-                    backgroundColor: isCyber ? '#fff' : theme.nodeInnerColor,
-                    boxShadow: isCyber ? '0 0 10px #fff, 0 0 20px rgba(255,255,255,0.4)' : 'none',
+                    backgroundColor: 'transparent',
+                    background: isPeacock ? 'radial-gradient(circle at 30% 30%, #FFF7CC, #DAA520)' : (isCyber ? '#fff' : theme.nodeInnerColor),
+                    boxShadow: isPeacock ? '0 0 10px #DAA520, 1px 1px 2px rgba(0,0,0,0.8)' : (isCyber ? '0 0 10px #fff, 0 0 20px rgba(255,255,255,0.4)' : 'none'),
                     opacity: 1
                   }}
                 />
@@ -248,6 +401,7 @@ export function MorrisBoard({
               canRemovePiece(gameState.board, position, gameState.currentPlayer === 'white' ? 'black' : 'white');
 
             const pieceTheme = piece === 'white' ? theme.whitePiece : theme.blackPiece;
+            const isDraggable = !disabled && !isReviewMode && piece === gameState.currentPlayer && (gameState.phase === 'moving' || (gameState.phase === 'placing' && false));
 
             return (
               <div
@@ -263,26 +417,39 @@ export function MorrisBoard({
                 <div
                   className={`
                     w-full h-full rounded-full flex items-center justify-center
-                    transition-all duration-200 cursor-pointer
+                    transition-all duration-200 
                     ${showHighlight ? 'ring-4 ring-green-400 ring-opacity-80' : ''}
-                    ${canRemove ? 'ring-4 ring-red-500 ring-opacity-80' : ''}
-                    ${canClick && !disabled ? 'hover:scale-110' : ''}
+                    ${canRemove ? 'ring-[6px] ring-red-500 ring-opacity-80' : ''}
+                    ${canClick && !disabled && !isDraggingIndex ? 'hover:scale-110 cursor-pointer' : ''}
                   `}
-                  style={{
-                    backgroundColor: 'transparent',
-                  }}
-                  onClick={() => canClick && onPositionClick(position)}
+                  style={{ backgroundColor: 'transparent' }}
+                  onClick={() => !isDraggingIndex && canClick && onPositionClick(position)}
                 >
                   <AnimatePresence mode="wait">
                     {piece && (
                       <motion.div
+                        drag={isDraggable}
+                        dragSnapToOrigin
+                        dragConstraints={boardContainerRef}
+                        onDragStart={() => handleDragStart(position)}
+                        onDragEnd={(e, info) => handleDragEnd(e, info, position)}
+                        whileDrag={{
+                          scale: 1.3,
+                          zIndex: 50,
+                          boxShadow: "0 10px 25px rgba(0,0,0,0.5)"
+                        }}
                         initial={{ scale: 0, opacity: 0 }}
-                        animate={{ scale: 1, opacity: 1 }}
+                        animate={{
+                          scale: isSelected ? 1.15 : 1,
+                          opacity: 1,
+                          zIndex: isDraggingIndex === position ? 50 : 10
+                        }}
                         exit={{ scale: 0, opacity: 0 }}
                         transition={{ type: "spring", stiffness: 500, damping: 30 }}
                         className={`
                           rounded-full flex items-center justify-center text-xl
-                          ${isSelected ? 'ring-4 ring-yellow-400 ring-opacity-80 scale-110' : ''}
+                          ${isSelected ? 'ring-4 ring-yellow-400 ring-opacity-80' : ''}
+                          ${isDraggable ? 'cursor-grab active:cursor-grabbing' : ''}
                         `}
                         style={{
                           width: PIECE_SIZE + 4,
@@ -292,6 +459,7 @@ export function MorrisBoard({
                           border: `2px solid ${pieceTheme.border}`,
                           boxShadow: isCyber ? `0 0 15px ${piece === 'white' ? '#22c55e' : '#ef4444'}` : pieceTheme.shadow,
                           color: pieceTheme.color,
+                          touchAction: 'none'
                         }}
                       >
                         {pieceTheme.content}
@@ -304,7 +472,6 @@ export function MorrisBoard({
           })}
         </div>
       </div>
-    </div >
+    </div>
   );
 }
-

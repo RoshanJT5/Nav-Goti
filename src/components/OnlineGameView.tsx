@@ -25,6 +25,13 @@ import {
   Loader2,
   Users,
   RefreshCw,
+  MessageSquare,
+  Flag,
+  Handshake,
+  ChevronLeft,
+  ChevronRight,
+  History,
+  Menu,
 } from "lucide-react";
 
 import { getTheme } from "@/lib/themes";
@@ -69,8 +76,8 @@ function jsonToGameState(json: GameStateJSON): GameState {
 }
 
 // Constants for heartbeat-based disconnect detection
-const HEARTBEAT_INTERVAL = 5000; // Send heartbeat every 5 seconds
-const DISCONNECT_TIMEOUT = 30000; // Consider opponent disconnected after 30 seconds of no heartbeat
+const HEARTBEAT_INTERVAL = 5000;
+const DISCONNECT_TIMEOUT = 30000;
 
 export function OnlineGameView({ roomId, onBack, profile }: OnlineGameViewProps) {
   const theme = getTheme(profile?.theme_id);
@@ -87,8 +94,22 @@ export function OnlineGameView({ roomId, onBack, profile }: OnlineGameViewProps)
   const statsUpdated = useRef(false);
   const lastUpdateTimestamp = useRef<number>(0);
   const gameStartedRef = useRef(false);
-  const lastOpponentPingRef = useRef<number>(Date.now());
   const forfeitHandled = useRef(false);
+
+  // Custom states for Timer and Chat
+  const [isChatOpen, setIsChatOpen] = useState(false);
+  const [isMenuOpen, setIsMenuOpen] = useState(false);
+  const [unreadMessages, setUnreadMessages] = useState(0);
+  const [whiteTimer, setWhiteTimer] = useState(45);
+  const [blackTimer, setBlackTimer] = useState(45);
+  const timerRef = useRef<NodeJS.Timeout | null>(null);
+
+  // History and Review states
+  const [isReviewMode, setIsReviewMode] = useState(false);
+  const [currentHistoryIndex, setCurrentHistoryIndex] = useState(-1);
+  const displayState = isReviewMode && gameState.historyStates && currentHistoryIndex >= 0
+    ? jsonToGameState(gameState.historyStates[currentHistoryIndex])
+    : gameState;
 
   useEffect(() => {
     const initRoom = async () => {
@@ -99,26 +120,16 @@ export function OnlineGameView({ roomId, onBack, profile }: OnlineGameViewProps)
         .single();
 
       if (fetchError && fetchError.code !== 'PGRST116') {
-        console.error('Error fetching room:', fetchError);
         setRoomStatus('error');
         return;
       }
 
       if (existingRoom) {
         const room = existingRoom as any;
-
-        // Check if the game was already forfeited
         if (room.status === 'forfeited' || room.forfeit_winner) {
-          console.log('Game was already forfeited');
           setGameState(jsonToGameState(room.game_state));
-
-          // Set player color based on stored player IDs
-          if (room.white_player_id === playerId) {
-            setPlayerColor('white');
-          } else if (room.black_player_id === playerId) {
-            setPlayerColor('black');
-          }
-
+          if (room.white_player_id === playerId) setPlayerColor('white');
+          else if (room.black_player_id === playerId) setPlayerColor('black');
           setWhiteName(room.white_player_name || 'Guest');
           setBlackName(room.black_player_name || 'Guest');
           setRoomStatus('finished');
@@ -127,59 +138,20 @@ export function OnlineGameView({ roomId, onBack, profile }: OnlineGameViewProps)
           return;
         }
 
-        // Check if opponent seems disconnected (their heartbeat is stale)
         const now = new Date();
-        const opponentLastActive = room.white_player_id === playerId
-          ? room.black_last_active
-          : room.white_last_active;
-
-        if (opponentLastActive && room.status === 'playing') {
-          const lastActiveTime = new Date(opponentLastActive).getTime();
-          const timeSinceActive = now.getTime() - lastActiveTime;
-
-          if (timeSinceActive > DISCONNECT_TIMEOUT) {
-            console.log('Opponent heartbeat stale - checking if they really left');
-            // We'll handle this in the heartbeat check, not here
-            // Just record our own presence for now
-          }
-        }
-
         if (room.white_player_id === null) {
-          await supabase
-            .from('game_rooms')
-            .update({
-              white_player_id: playerId,
-              white_player_name: playerName,
-              white_last_active: now.toISOString()
-            })
-            .eq('id', roomId);
+          await supabase.from('game_rooms').update({ white_player_id: playerId, white_player_name: playerName, white_last_active: now.toISOString() }).eq('id', roomId);
           setPlayerColor('white');
         } else if (room.black_player_id === null && room.white_player_id !== playerId) {
-          await supabase
-            .from('game_rooms')
-            .update({
-              black_player_id: playerId,
-              black_player_name: playerName,
-              black_last_active: now.toISOString(),
-              status: 'playing'
-            })
-            .eq('id', roomId);
+          await supabase.from('game_rooms').update({ black_player_id: playerId, black_player_name: playerName, black_last_active: now.toISOString(), status: 'playing' }).eq('id', roomId);
           setPlayerColor('black');
           setOpponentConnected(true);
         } else if (room.white_player_id === playerId) {
           setPlayerColor('white');
-          // Update our heartbeat
-          await supabase.from('game_rooms').update({
-            white_player_name: playerName,
-            white_last_active: now.toISOString()
-          }).eq('id', roomId);
+          await supabase.from('game_rooms').update({ white_player_name: playerName, white_last_active: now.toISOString() }).eq('id', roomId);
         } else if (room.black_player_id === playerId) {
           setPlayerColor('black');
-          // Update our heartbeat
-          await supabase.from('game_rooms').update({
-            black_player_name: playerName,
-            black_last_active: now.toISOString()
-          }).eq('id', roomId);
+          await supabase.from('game_rooms').update({ black_player_name: playerName, black_last_active: now.toISOString() }).eq('id', roomId);
         } else {
           setRoomStatus('error');
           return;
@@ -192,413 +164,187 @@ export function OnlineGameView({ roomId, onBack, profile }: OnlineGameViewProps)
           setOpponentConnected(updatedRoom.black_player_id !== null && updatedRoom.white_player_id !== null);
           setWhiteName(updatedRoom.white_player_name || 'Guest');
           setBlackName(updatedRoom.black_player_name || 'Guest');
-
-          // Mark game as started if restoring a playing game (after refresh)
-          if (updatedRoom.status === 'playing') {
-            gameStartedRef.current = true;
-            console.log('Restored game session - game already started');
-          }
+          if (updatedRoom.status === 'playing') gameStartedRef.current = true;
         }
       } else {
         const initialState = createInitialState();
-        const { error: createError } = await supabase
-          .from('game_rooms')
-          .insert({
-            id: roomId,
-            white_player_id: playerId,
-            white_player_name: playerName,
-            game_state: gameStateToJSON(initialState),
-            status: 'waiting'
-          });
-
-        if (createError) {
-          console.error('Error creating room:', createError);
-          setRoomStatus('error');
-          return;
-        }
-
+        await supabase.from('game_rooms').insert({ id: roomId, white_player_id: playerId, white_player_name: playerName, game_state: gameStateToJSON(initialState), status: 'waiting' });
         setPlayerColor('white');
         setWhiteName(playerName);
         setRoomStatus('waiting');
       }
     };
-
     initRoom();
   }, [roomId, playerId, playerName]);
 
   useEffect(() => {
-    let channel: ReturnType<typeof supabase.channel> | null = null;
-    let pollingInterval: NodeJS.Timeout | null = null;
-    let isMounted = true; // Flag to prevent actions after unmount
+    let channel: any = null;
+    let pollingInterval: any = null;
+    let isMounted = true;
 
     const setupSubscription = async () => {
-      // Subscribe to game room changes with improved real-time handling
       channel = supabase
-        .channel(`room:${roomId}`, {
-          config: {
-            broadcast: { self: true }, // Receive our own updates for confirmation
-            presence: { key: playerId },
-          },
+        .channel(`room:${roomId}`, { config: { broadcast: { self: true }, presence: { key: playerId } } })
+        .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'game_rooms', filter: `id=eq.${roomId}` }, (payload: any) => {
+          const room = payload.new;
+          const serverState = jsonToGameState(room.game_state);
+          setGameState(currentState => {
+            const serverMoveCount = serverState.moveHistory?.length || 0;
+            const localMoveCount = currentState.moveHistory?.length || 0;
+            if (serverMoveCount !== localMoveCount || serverState.phase !== currentState.phase || serverState.winner !== currentState.winner) {
+              return serverState;
+            }
+            return currentState;
+          });
+          setRoomStatus(room.status);
+          setOpponentConnected(room.black_player_id !== null && room.white_player_id !== null);
+          setWhiteName(room.white_player_name || 'Guest');
+          setBlackName(room.black_player_name || 'Guest');
+          if (room.status === 'playing' && !gameStartedRef.current) gameStartedRef.current = true;
         })
-        .on(
-          'postgres_changes',
-          {
-            event: 'UPDATE',
-            schema: 'public',
-            table: 'game_rooms',
-            filter: `id=eq.${roomId}`
-          },
-          (payload) => {
-            const room = payload.new as any;
-            const serverState = jsonToGameState(room.game_state);
-            const updateTime = new Date(room.updated_at).getTime();
-
-            // Only update if there's an actual game state change (different move count)
-            // This preserves local selectedPiece state during piece selection
-            setGameState(currentState => {
-              const serverMoveCount = serverState.moveHistory?.length || 0;
-              const localMoveCount = currentState.moveHistory?.length || 0;
-
-              // If server has more moves, or game phase changed, update fully
-              if (serverMoveCount !== localMoveCount ||
-                serverState.phase !== currentState.phase ||
-                serverState.winner !== currentState.winner) {
-                console.log('Receiving game state update:', updateTime);
-                lastUpdateTimestamp.current = updateTime;
-                return serverState;
-              }
-
-              // Otherwise, keep current state (preserve selectedPiece)
-              return currentState;
-            });
-
-            setRoomStatus(room.status);
-            setOpponentConnected(room.black_player_id !== null && room.white_player_id !== null);
-            setWhiteName(room.white_player_name || 'Guest');
-            setBlackName(room.black_player_name || 'Guest');
-
-            // Track when game has started (both players connected)
-            if (room.status === 'playing' && !gameStartedRef.current) {
-              gameStartedRef.current = true;
-              console.log('Game officially started');
-            }
+        .on('presence', { event: 'sync' }, () => {
+          const state = channel?.presenceState() || {};
+          if (Object.keys(state).length >= 2) {
+            setOpponentConnected(true);
+            setOpponentDisconnected(false);
           }
-        )
-        .on(
-          'presence',
-          { event: 'sync' },
-          () => {
-            const state = channel?.presenceState() || {};
-            const presenceKeys = Object.keys(state);
-            const presenceCount = presenceKeys.length;
-            console.log('Presence sync:', presenceCount, 'users connected', presenceKeys);
-
-            // Update last ping time when we see opponent
-            if (presenceCount >= 2) {
-              lastOpponentPingRef.current = Date.now();
-              setOpponentConnected(true);
-              setOpponentDisconnected(false);
-            } else if (gameStartedRef.current && presenceCount < 2) {
-              // Only mark as disconnected if the game had started
-              console.log('Opponent may have disconnected, only', presenceCount, 'user(s) present');
-            }
+        })
+        .on('presence', { event: 'leave' }, (payload: any) => {
+          if (gameStartedRef.current && payload.key !== playerId && gameState.phase !== 'gameOver') {
+            setOpponentDisconnected(true);
+            setOpponentConnected(false);
+            setGameState(prev => ({ ...prev, phase: 'gameOver', winner: playerColor }));
+            supabase.from('game_rooms').update({ status: 'finished', game_state: gameStateToJSON({ ...gameState, phase: 'gameOver', winner: playerColor }) }).eq('id', roomId);
           }
-        )
-        .on(
-          'presence',
-          { event: 'leave' },
-          (payload) => {
-            console.log('User left:', payload.key);
-
-            // If game has started and opponent left, they forfeit
-            if (gameStartedRef.current && payload.key !== playerId && gameState.phase !== 'gameOver') {
-              console.log('Opponent disconnected! Declaring winner by forfeit.');
-              setOpponentDisconnected(true);
-              setOpponentConnected(false);
-
-              // Update game state to show winner
-              setGameState(prevState => ({
-                ...prevState,
-                phase: 'gameOver',
-                winner: playerColor
-              }));
-
-              // Update room status in database
-              supabase
-                .from('game_rooms')
-                .update({
-                  status: 'finished',
-                  game_state: gameStateToJSON({
-                    ...gameState,
-                    phase: 'gameOver',
-                    winner: playerColor
-                  })
-                })
-                .eq('id', roomId)
-                .then(() => console.log('Room status updated after opponent disconnect'));
-            }
-          }
-        )
-        .subscribe(async (status) => {
-          if (!isMounted) return; // Don't do anything if unmounted
-
-          if (status === 'SUBSCRIBED') {
-            console.log('Game room channel subscribed successfully');
-            // Send presence update to let opponent know we're connected
-            await channel?.track({
-              user_id: playerId,
-              user_name: playerName,
-              status: 'connected'
-            });
-          } else if (status === 'CHANNEL_ERROR' || status === 'CLOSED') {
-            // Only log error and attempt reconnect if still mounted
-            if (isMounted) {
-              console.error('Game room channel error/closed:', status);
-              // Attempt to reconnect after delay
-              setTimeout(() => {
-                if (!isMounted) return; // Check again before reconnecting
-                console.log('Attempting to reconnect to game room');
-                if (channel) {
-                  supabase.removeChannel(channel);
-                }
-                setupSubscription();
-              }, 3000);
-            }
-          }
+        })
+        .subscribe(async (status: any) => {
+          if (status === 'SUBSCRIBED') await channel?.track({ user_id: playerId, user_name: playerName, status: 'connected' });
         });
 
-      // Polling fallback: Check for opponent every 2 seconds while waiting
       pollingInterval = setInterval(async () => {
-        if (!isMounted) return; // Don't poll if unmounted
-
-        const { data: room } = await supabase
-          .from('game_rooms')
-          .select('*')
-          .eq('id', roomId)
-          .single();
-
+        if (!isMounted) return;
+        const { data: room } = await supabase.from('game_rooms').select('*').eq('id', roomId).single();
         if (room && isMounted) {
           const bothConnected = room.black_player_id !== null && room.white_player_id !== null;
-
-          // Update connection status
           setOpponentConnected(bothConnected);
           setRoomStatus(room.status);
           setWhiteName(room.white_player_name || 'Guest');
           setBlackName(room.black_player_name || 'Guest');
-
-          // Only update game state if there's an actual change
-          if (bothConnected) {
-            const serverState = jsonToGameState(room.game_state);
-            setGameState(currentState => {
-              const serverMoveCount = serverState.moveHistory?.length || 0;
-              const localMoveCount = currentState.moveHistory?.length || 0;
-
-              // If server has more moves, or game phase changed, update fully
-              if (serverMoveCount !== localMoveCount ||
-                serverState.phase !== currentState.phase ||
-                serverState.winner !== currentState.winner) {
-                console.log('Polling: Game state changed');
-                return serverState;
-              }
-
-              // Otherwise, keep current state (preserve selectedPiece)
-              return currentState;
-            });
-          }
         }
-      }, 2000);
+      }, 5000);
     };
 
     setupSubscription();
+    return () => { isMounted = false; clearInterval(pollingInterval); if (channel) supabase.removeChannel(channel); };
+  }, [roomId, playerId, playerName, playerColor, gameState]);
 
-    return () => {
-      console.log('Unsubscribing from game room channel');
-      isMounted = false; // Mark as unmounted first
-      if (pollingInterval) {
-        clearInterval(pollingInterval);
-      }
-      if (channel) {
-        supabase.removeChannel(channel);
-      }
-    };
-  }, [roomId, playerId, playerName]);
-
-  // Heartbeat effect: Send regular "I'm alive" signals and check for opponent timeout
+  // Timer Countdown Logic
   useEffect(() => {
-    if (!playerColor || roomStatus !== 'playing' || gameState.phase === 'gameOver' || forfeitHandled.current) {
+    if (roomStatus !== 'playing' || gameState.phase === 'gameOver' || !opponentConnected) {
+      if (timerRef.current) clearInterval(timerRef.current);
       return;
     }
 
-    const heartbeatColumn = playerColor === 'white' ? 'white_last_active' : 'black_last_active';
-    const opponentHeartbeatColumn = playerColor === 'white' ? 'black_last_active' : 'white_last_active';
-
-    const sendHeartbeat = async () => {
-      await supabase
-        .from('game_rooms')
-        .update({ [heartbeatColumn]: new Date().toISOString() })
-        .eq('id', roomId);
-    };
-
-    const checkOpponentHeartbeat = async () => {
-      // Don't check if forfeit already handled
-      if (forfeitHandled.current || gameState.phase === 'gameOver') return;
-
-      const { data: room } = await supabase
-        .from('game_rooms')
-        .select('*')
-        .eq('id', roomId)
-        .single();
-
-      if (!room) return;
-
-      // If game is already finished/forfeited, don't process
-      if (room.status === 'finished' || room.status === 'forfeited' || room.forfeit_winner) {
-        return;
+    timerRef.current = setInterval(() => {
+      if (gameState.currentPlayer === 'white') {
+        setWhiteTimer(t => {
+          if (t <= 1) {
+            handleTimerForfeit('white');
+            return 0;
+          }
+          return t - 1;
+        });
+      } else {
+        setBlackTimer(t => {
+          if (t <= 1) {
+            handleTimerForfeit('black');
+            return 0;
+          }
+          return t - 1;
+        });
       }
+    }, 1000);
 
-      const opponentLastActive = room[opponentHeartbeatColumn];
+    return () => { if (timerRef.current) clearInterval(timerRef.current); };
+  }, [roomStatus, gameState.phase, gameState.currentPlayer, opponentConnected]);
 
-      if (opponentLastActive && gameStartedRef.current) {
-        const lastActiveTime = new Date(opponentLastActive).getTime();
-        const timeSinceActive = Date.now() - lastActiveTime;
-
-        if (timeSinceActive > DISCONNECT_TIMEOUT) {
-          console.log(`Opponent hasn't sent heartbeat for ${timeSinceActive}ms - declaring forfeit`);
-
-          // Prevent duplicate forfeit handling
-          forfeitHandled.current = true;
-
-          const forfeitGameState = {
-            ...gameState,
-            phase: 'gameOver' as const,
-            winner: playerColor
-          };
-
-          // Update database with forfeit
-          await supabase
-            .from('game_rooms')
-            .update({
-              status: 'forfeited',
-              forfeit_winner: playerColor,
-              game_state: gameStateToJSON(forfeitGameState)
-            })
-            .eq('id', roomId);
-
-          // Update local state
-          setGameState(forfeitGameState);
-          setOpponentDisconnected(true);
-          setOpponentConnected(false);
-          setRoomStatus('finished');
-        }
-      }
-    };
-
-    // Send initial heartbeat
-    sendHeartbeat();
-
-    // Set up intervals for heartbeat and opponent check
-    const heartbeatInterval = setInterval(sendHeartbeat, HEARTBEAT_INTERVAL);
-    const opponentCheckInterval = setInterval(checkOpponentHeartbeat, 10000); // Check every 10 seconds
-
-    return () => {
-      clearInterval(heartbeatInterval);
-      clearInterval(opponentCheckInterval);
-    };
-  }, [playerColor, roomStatus, roomId, gameState]);
-
+  // Reset timers on turn change
   useEffect(() => {
-    if (gameState.phase === 'gameOver' && !statsUpdated.current && profile) {
-      const updateStats = async () => {
-        statsUpdated.current = true;
-        const isWinner = gameState.winner === playerColor;
-        const updates: any = {};
+    setWhiteTimer(45);
+    setBlackTimer(45);
+  }, [gameState.currentPlayer, gameState.moveHistory?.length]);
 
-        if (isWinner) {
-          updates.wins = (profile.wins || 0) + 1;
-        } else {
-          updates.losses = (profile.losses || 0) + 1;
-        }
+  const handleTimerForfeit = async (timedOutPlayer: 'white' | 'black') => {
+    if (forfeitHandled.current || gameState.phase === 'gameOver') return;
+    forfeitHandled.current = true;
+    const winner = timedOutPlayer === 'white' ? 'black' : 'white';
+    const forfeitState = { ...gameState, phase: 'gameOver' as const, winner: winner as Player };
+    await supabase.from('game_rooms').update({ status: 'forfeited', forfeit_winner: winner, game_state: gameStateToJSON(forfeitState) }).eq('id', roomId);
+    setGameState(forfeitState);
+    setRoomStatus('finished');
+  };
 
-        await supabase
-          .from('profiles')
-          .update(updates)
-          .eq('id', profile.id);
-      };
-      updateStats();
-    }
-  }, [gameState.phase, gameState.winner, playerColor, profile]);
+  const formatTime = (seconds: number) => {
+    const m = Math.floor(seconds / 60);
+    const s = seconds % 60;
+    return `${m}:${s.toString().padStart(2, '0')}`;
+  };
 
   const updateGameState = async (newState: GameState) => {
-    // Don't use a blocking flag - let updates queue naturally
-    const updateTime = Date.now();
-    lastUpdateTimestamp.current = updateTime;
-
-    try {
-      // Update immediately with retry logic
-      let retryCount = 0;
-      const maxRetries = 3;
-
-      const attemptUpdate = async (): Promise<boolean> => {
-        try {
-          const { error } = await supabase
-            .from('game_rooms')
-            .update({
-              game_state: gameStateToJSON(newState),
-              status: newState.phase === 'gameOver' ? 'finished' : 'playing',
-              updated_at: new Date(updateTime).toISOString()
-            })
-            .eq('id', roomId);
-
-          if (error) {
-            console.error('Error updating game state:', error);
-            if (retryCount < maxRetries) {
-              retryCount++;
-              console.log(`Retrying update (${retryCount}/${maxRetries})...`);
-              // Wait before retry with exponential backoff
-              await new Promise(resolve => setTimeout(resolve, 100 * retryCount));
-              return attemptUpdate();
-            }
-
-            // After max retries, try to recover the state
-            const { data: currentRoom } = await supabase
-              .from('game_rooms')
-              .select('*')
-              .eq('id', roomId)
-              .single();
-
-            if (currentRoom) {
-              console.log('Recovering game state from server');
-              setGameState(jsonToGameState(currentRoom.game_state));
-            }
-            return false;
-          }
-
-          console.log('Game state updated successfully');
-          return true;
-        } catch (err) {
-          console.error('Exception updating game state:', err);
-          if (retryCount < maxRetries) {
-            retryCount++;
-            await new Promise(resolve => setTimeout(resolve, 100 * retryCount));
-            return attemptUpdate();
-          }
-          return false;
-        }
-      };
-
-      await attemptUpdate();
-    } catch (err) {
-      console.error('Unexpected error in updateGameState:', err);
-    }
+    await supabase.from('game_rooms').update({
+      game_state: gameStateToJSON(newState),
+      status: newState.phase === 'gameOver' ? 'finished' : 'playing',
+      updated_at: new Date().toISOString()
+    }).eq('id', roomId);
   };
 
   const isPlayerTurn = playerColor === gameState.currentPlayer;
 
+  const handleBackHistory = () => {
+    if (!gameState.historyStates || gameState.historyStates.length === 0) return;
+    setIsReviewMode(true);
+    setCurrentHistoryIndex(prev => {
+      const newIndex = prev === -1 ? gameState.historyStates!.length - 2 : prev - 1;
+      return Math.max(0, newIndex);
+    });
+  };
+
+  const handleForwardHistory = () => {
+    if (!gameState.historyStates || currentHistoryIndex === -1) return;
+    setCurrentHistoryIndex(prev => {
+      const newIndex = prev + 1;
+      if (newIndex >= gameState.historyStates!.length - 1) {
+        setIsReviewMode(false);
+        return -1;
+      }
+      return newIndex;
+    });
+  };
+
+  const handleAbort = async () => {
+    if (gameState.phase === 'gameOver') return;
+    if (confirm("Are you sure you want to abort the game? This will count as a loss.")) {
+      const winner = playerColor === 'white' ? 'black' : 'white';
+      const forfeitState = { ...gameState, phase: 'gameOver' as const, winner: winner as Player };
+      await supabase.from('game_rooms').update({
+        status: 'forfeited',
+        forfeit_winner: winner,
+        game_state: gameStateToJSON(forfeitState)
+      }).eq('id', roomId);
+      setGameState(forfeitState);
+      setRoomStatus('finished');
+    }
+  };
+
+  const handleOfferDraw = () => {
+    alert("Draw offer functionality coming in next update!");
+  };
+
   const handlePositionClick = useCallback(async (position: Position) => {
+    if (isReviewMode) return; // Disable moves in review mode
     if (!isPlayerTurn || gameState.phase === 'gameOver' || !opponentConnected) return;
 
     let newState: GameState;
-
     if (gameState.mustRemove) {
       newState = removePiece(gameState, position);
       if (newState === gameState) return;
@@ -609,75 +355,63 @@ export function OnlineGameView({ roomId, onBack, profile }: OnlineGameViewProps)
       if (gameState.selectedPiece === null) {
         newState = selectPiece(gameState, position);
         if (newState === gameState) return;
-        // Local UI update only - don't sync to server
         setGameState(newState);
         return;
       } else {
         if (position === gameState.selectedPiece) {
-          // Deselect - local UI update only
           setGameState({ ...gameState, selectedPiece: null });
           return;
         }
-
         if (gameState.board[position] === gameState.currentPlayer) {
-          const validMoves = getValidMoves(gameState, position);
-          if (validMoves.length > 0) {
-            // Select different piece - local UI update only
+          if (getValidMoves(gameState, position).length > 0) {
             setGameState({ ...gameState, selectedPiece: position });
             return;
           }
         }
-
         newState = movePiece(gameState, gameState.selectedPiece, position);
         if (newState === gameState) return;
       }
     }
-
-    // Optimistic update: Update local state immediately for responsive UI
+    if (typeof navigator !== 'undefined' && navigator.vibrate) navigator.vibrate(20);
     setGameState(newState);
-
-    // Then sync to server (realtime subscription will confirm for both players)
     await updateGameState(newState);
   }, [gameState, isPlayerTurn, opponentConnected, roomId]);
 
   const handlePlayAgain = useCallback(async () => {
-    // Create a fresh game state
-    const newInitialState = createInitialState();
-
-    // Swap colors for fairness (winner goes second next round)
-    const { data: currentRoom } = await supabase
-      .from('game_rooms')
-      .select('*')
-      .eq('id', roomId)
-      .single();
-
-    if (currentRoom) {
-      // Swap player assignments
-      const { error } = await supabase
-        .from('game_rooms')
-        .update({
-          white_player_id: currentRoom.black_player_id,
-          white_player_name: currentRoom.black_player_name,
-          black_player_id: currentRoom.white_player_id,
-          black_player_name: currentRoom.white_player_name,
-          game_state: gameStateToJSON(newInitialState),
-          status: 'playing'
-        })
-        .eq('id', roomId);
-
-      if (!error) {
-        // Update local state
-        setGameState(newInitialState);
-        // Swap our color
-        setPlayerColor(prev => prev === 'white' ? 'black' : 'white');
-        // Swap displayed names
-        setWhiteName(currentRoom.black_player_name || 'Guest');
-        setBlackName(currentRoom.white_player_name || 'Guest');
-        // Reset stats updated flag for new game
-        statsUpdated.current = false;
-      }
+    const { data: room } = await supabase.from('game_rooms').select('*').eq('id', roomId).single();
+    if (room) {
+      const newState = createInitialState();
+      await supabase.from('game_rooms').update({
+        white_player_id: room.black_player_id,
+        white_player_name: room.black_player_name,
+        black_player_id: room.white_player_id,
+        black_player_name: room.white_player_name,
+        game_state: gameStateToJSON(newState),
+        status: 'playing',
+        forfeit_winner: null
+      }).eq('id', roomId);
+      setGameState(newState);
+      setPlayerColor(prev => prev === 'white' ? 'black' : 'white');
+      setWhiteName(room.black_player_name);
+      setBlackName(room.white_player_name);
+      forfeitHandled.current = false;
+      setWhiteTimer(45);
+      setBlackTimer(45);
     }
   }, [roomId]);
+
+  const getStatusMessage = () => {
+    if (roomStatus === 'loading') return 'Connecting...';
+    if (roomStatus === 'waiting') return 'Waiting for opponent...';
+    if (gameState.phase === 'gameOver') {
+      if (opponentDisconnected) return 'Opponent left - You win!';
+      if (whiteTimer === 0 || blackTimer === 0) return 'Time out - ' + (gameState.winner === playerColor ? 'You win!' : 'You lose!');
+      return gameState.winner === playerColor ? 'You win!' : 'You lose!';
+    }
+    if (!isPlayerTurn) return "Opponent's turn...";
+    if (gameState.mustRemove) return "Remove opponent's piece!";
+    return gameState.phase === 'placing' ? 'Place a piece' : 'Make a move';
+  };
 
   const copyRoomCode = () => {
     navigator.clipboard.writeText(roomId);
@@ -685,288 +419,595 @@ export function OnlineGameView({ roomId, onBack, profile }: OnlineGameViewProps)
     setTimeout(() => setCopied(false), 2000);
   };
 
-  const getStatusMessage = () => {
-    if (roomStatus === 'loading') return 'Connecting...';
-    if (roomStatus === 'error') return 'Failed to connect to room';
-    if (roomStatus === 'waiting') return 'Waiting for opponent...';
-    if (gameState.phase === 'gameOver') {
-      if (opponentDisconnected) {
-        return 'Opponent left - You win!';
-      }
-      const winner = gameState.winner === playerColor ? 'You win!' : 'You lose!';
-      return winner;
-    }
-    if (opponentDisconnected) return 'Opponent disconnected!';
-    if (!isPlayerTurn) return "Opponent's turn...";
-    if (gameState.mustRemove) return "Remove opponent's piece!";
-    if (gameState.phase === 'placing') return 'Place a piece';
-    if (gameState.selectedPiece !== null) return 'Move to highlighted position';
-    return 'Select a piece to move';
+  // Draw Offer States
+  const [incomingDrawOffer, setIncomingDrawOffer] = useState<{ id: string, from_player_name: string } | null>(null);
+
+  useEffect(() => {
+    if (roomStatus !== 'playing') return;
+
+    const channel = supabase
+      .channel(`draw_offers:${roomId}`)
+      .on('postgres_changes', {
+        event: 'INSERT',
+        schema: 'public',
+        table: 'draw_offers',
+        filter: `room_id=eq.${roomId}`
+      }, async (payload: any) => {
+        const offer = payload.new;
+        if (offer.offered_by_player_id !== playerId && offer.status === 'pending') {
+          // Get opponent name
+          const { data: profile } = await supabase.from('profiles').select('name').eq('id', offer.offered_by_player_id).single();
+          setIncomingDrawOffer({ id: offer.id, from_player_name: profile?.name || 'Opponent' });
+        }
+      })
+      .on('postgres_changes', {
+        event: 'UPDATE',
+        schema: 'public',
+        table: 'draw_offers',
+        filter: `room_id=eq.${roomId}`
+      }, (payload: any) => {
+        const offer = payload.new;
+        if (offer.status === 'accepted' && roomStatus === 'playing') {
+          setGameState(prev => ({ ...prev, phase: 'gameOver', winner: null }));
+          setRoomStatus('finished');
+          alert("Draw accepted! The game is over.");
+        } else if (offer.status === 'declined' && offer.offered_by_player_id === playerId) {
+          alert("Draw offer declined.");
+        }
+      })
+      .subscribe();
+
+    return () => { supabase.removeChannel(channel); };
+  }, [roomId, playerId, roomStatus]);
+
+  const handleSendDrawOffer = async () => {
+    if (gameState.phase === 'gameOver') return;
+    const { error } = await supabase.from('draw_offers').insert({
+      room_id: roomId,
+      offered_by_player_id: playerId,
+      status: 'pending'
+    });
+    if (error) alert("Failed to send draw offer");
+    else alert("Draw offer sent to opponent");
+  };
+
+  const handleAcceptDraw = async () => {
+    if (!incomingDrawOffer) return;
+    await supabase.from('draw_offers').update({
+      status: 'accepted',
+      responded_at: new Date().toISOString()
+    }).eq('id', incomingDrawOffer.id);
+
+    const drawState = { ...gameState, phase: 'gameOver' as const, winner: null };
+    await supabase.from('game_rooms').update({
+      status: 'finished',
+      game_state: gameStateToJSON(drawState)
+    }).eq('id', roomId);
+
+    setGameState(drawState);
+    setRoomStatus('finished');
+    setIncomingDrawOffer(null);
+  };
+
+  const handleDeclineDraw = async () => {
+    if (!incomingDrawOffer) return;
+    await supabase.from('draw_offers').update({
+      status: 'declined',
+      responded_at: new Date().toISOString()
+    }).eq('id', incomingDrawOffer.id);
+    setIncomingDrawOffer(null);
   };
 
   return (
     <div
-      className="h-screen flex flex-col overflow-hidden transition-colors duration-500"
-      style={{ backgroundColor: theme.appBackground }}
+      className="h-screen flex flex-col overflow-hidden transition-all duration-500 relative"
+      style={{
+        background: theme.id === 'peacock' ? 'transparent' : theme.appBackground,
+        backgroundAttachment: 'fixed',
+      }}
     >
-      {/* Compact Header */}
-      <header
-        className="border-b px-3 py-2 transition-colors duration-500 shrink-0"
-        style={{ backgroundColor: theme.headerBg, borderColor: theme.boardLineColor + '20' }}
-      >
-        <div className="flex items-center justify-between">
-          <button
-            onClick={onBack}
-            className="flex items-center gap-2 hover:opacity-80 transition-colors"
-            style={{ color: theme.textColor }}
-          >
-            <Home className="w-5 h-5" />
-            <span className="font-bold text-sm hidden sm:inline" style={{ color: theme.titleColor }}>Nav Goti</span>
-          </button>
-          <div className="flex items-center gap-2 text-xs">
-            <code className="px-2 py-1 rounded font-mono" style={{ backgroundColor: theme.cardBg, color: theme.textColor }}>
-              {roomId}
-            </code>
-            <Button
-              size="icon"
-              variant="ghost"
-              onClick={copyRoomCode}
-              className="h-7 w-7"
-            >
-              {copied ? <Check className="w-3 h-3 text-green-500" /> : <Copy className="w-3 h-3" style={{ color: theme.textColor }} />}
-            </Button>
-          </div>
-        </div>
-      </header>
+      {/* Background Atmosphere Layer */}
+      <div className={theme.id === 'peacock' ? 'peacock-atmosphere' : ''} />
 
-      {roomStatus === 'waiting' ? (
-        <div className="flex-1 flex items-center justify-center p-4">
-          <motion.div
-            initial={{ opacity: 0, scale: 0.95 }}
-            animate={{ opacity: 1, scale: 1 }}
-            className="rounded-xl p-8 text-center max-w-md border-2"
-            style={{ backgroundColor: theme.cardBg, borderColor: theme.lineColor + '10' }}
-          >
-            <div className="w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-4 shadow-lg" style={{ backgroundColor: theme.accentColor }}>
-              <Users className="w-8 h-8 text-white" />
-            </div>
-            <h2 className="text-2xl font-bold mb-2" style={{ color: theme.textColor }}>Waiting for Opponent</h2>
-            <p className="opacity-60 mb-4" style={{ color: theme.textColor }}>Share this room code:</p>
-            <div className="flex items-center justify-center gap-2 mb-6">
-              <code className="px-6 py-3 rounded-lg text-3xl font-mono shadow-inner" style={{ backgroundColor: theme.appBackground, color: theme.textColor }}>
+      {/* Background Texture Layer */}
+      {theme.bgImage && (
+        <div
+          className={`absolute inset-0 pointer-events-none z-0 ${theme.id === 'peacock' ? 'peacock-feather-pattern' : ''}`}
+          style={{
+            backgroundImage: `url(${theme.bgImage})`,
+            backgroundSize: 'cover',
+            backgroundPosition: 'center',
+            backgroundAttachment: 'fixed',
+            opacity: theme.bgImageOpacity ?? 1,
+          }}
+        />
+      )}
+
+      {/* Main Content Layer */}
+      <div className="relative z-10 flex flex-col h-full">
+        <header
+          className="border-b px-3 py-2 shrink-0 sticky top-0 z-50 backdrop-blur-md"
+          style={{
+            backgroundColor: theme.headerBg,
+            borderColor: theme.id === 'peacock' ? 'rgba(255, 215, 0, 0.3)' : theme.boardLineColor + '20'
+          }}
+        >
+          <div className="flex items-center justify-between">
+            <button onClick={onBack} className="flex items-center gap-2 hover:opacity-80 transition-colors" style={{ color: theme.textColor }}>
+              <Home className="w-5 h-5" />
+              <span className="font-bold text-sm" style={{ color: theme.titleColor }}>Nav Goti</span>
+            </button>
+            <div className="flex items-center gap-2 text-xs">
+              <code
+                className="px-2 py-1 rounded font-mono border"
+                style={{
+                  backgroundColor: theme.appBackground,
+                  borderColor: theme.id === 'peacock' ? 'rgba(255, 215, 0, 0.3)' : 'transparent',
+                  color: theme.textColor
+                }}
+              >
                 {roomId}
               </code>
-              <Button
-                size="icon"
-                variant="outline"
-                onClick={copyRoomCode}
-                className="h-12 w-12"
-                style={{ borderColor: theme.lineColor + '20' }}
-              >
-                {copied ? <Check className="w-6 h-6 text-green-500" /> : <Copy className="w-6 h-6" style={{ color: theme.textColor }} />}
+              <Button size="icon" variant="ghost" onClick={copyRoomCode} className="h-7 w-7">
+                {copied ? <Check className="w-3 h-3 text-green-500" /> : <Copy className="w-3 h-3" style={{ color: theme.textColor }} />}
               </Button>
             </div>
-            <div className="flex items-center justify-center gap-3 opacity-60" style={{ color: theme.textColor }}>
-              <Loader2 className="w-5 h-5 animate-spin" />
-              <span>Waiting for player...</span>
-            </div>
-          </motion.div>
-        </div>
-      ) : (
-        <>
-          {/* Top Player Bar (Opponent - Black) */}
-          <div
-            className="border-b px-3 py-3 flex items-center justify-between transition-all shrink-0"
-            style={{
-              backgroundColor: theme.cardBg,
-              borderColor: theme.boardLineColor + '20',
-              borderLeftWidth: gameState.currentPlayer === 'black' ? '4px' : '0px',
-              borderLeftColor: gameState.currentPlayer === 'black' ? theme.accentColor : 'transparent',
-            }}
-          >
-            <div className="flex items-center gap-3 flex-1 min-w-0">
-              <div
-                className="w-10 h-10 rounded-full border-2 shadow-lg flex items-center justify-center text-xs shrink-0 transition-all"
-                style={{
-                  background: theme.blackPiece.bg,
-                  borderColor: gameState.currentPlayer === 'black' ? theme.accentColor : theme.blackPiece.border,
-                  borderWidth: gameState.currentPlayer === 'black' ? '3px' : '2px',
-                  color: theme.blackPiece.color,
-                  boxShadow: gameState.currentPlayer === 'black' ? `0 0 20px ${theme.accentColor}` : '0 4px 8px rgba(0,0,0,0.3)'
-                }}
-              >
-                {theme.blackPiece.content}
-              </div>
-              <div className="flex-1 min-w-0">
-                <div 
-                  className="text-sm truncate transition-all"
-                  style={{ 
-                    color: gameState.currentPlayer === 'black' ? theme.accentColor : theme.textColor,
-                    fontWeight: gameState.currentPlayer === 'black' ? '800' : '600',
-                    fontSize: gameState.currentPlayer === 'black' ? '0.95rem' : '0.875rem'
-                  }}
-                >
-                  {blackName}
-                </div>
-                <div className="text-[11px] opacity-70 truncate" style={{ color: theme.textColor }}>
-                  {TOTAL_PIECES - gameState.blackPiecesPlaced} to place • {gameState.blackPiecesOnBoard} on board
-                </div>
-              </div>
-            </div>
-            {gameState.currentPlayer === 'black' && (
-              <div className="flex items-center gap-1.5 shrink-0">
-                <span className="text-[10px] font-bold uppercase tracking-wide" style={{ color: theme.accentColor }}>
-                  {playerColor === 'black' ? 'Your turn' : 'Their turn'}
-                </span>
-                <div 
-                  className="w-2.5 h-2.5 rounded-full animate-pulse shrink-0"
-                  style={{ backgroundColor: theme.accentColor }}
-                />
-              </div>
-            )}
           </div>
+        </header>
 
-          {/* Board Container */}
-          <div className="flex-1 flex flex-col items-center justify-center p-2 overflow-hidden">
-            {/* Status Message - Above Board */}
-            <div
-              className="px-4 py-1.5 rounded-full text-xs font-bold shadow-md mb-2"
+        {roomStatus === 'waiting' ? (
+          <div className="flex-1 flex items-center justify-center p-4">
+            <motion.div
+              initial={{ scale: 0.9, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              className="rounded-xl p-8 text-center max-w-md w-full border backdrop-blur-xl shadow-2xl"
               style={{
-                backgroundColor: gameState.mustRemove
-                  ? '#ef444420'
-                  : gameState.phase === 'gameOver'
-                  ? theme.accentColor
-                  : theme.accentColor + '15',
-                color: gameState.mustRemove
-                  ? '#ef4444'
-                  : gameState.phase === 'gameOver'
-                  ? '#fff'
-                  : theme.textColor,
-                border: `1px solid ${gameState.mustRemove ? '#ef4444' : theme.accentColor}40`
+                backgroundColor: theme.cardBg,
+                borderColor: theme.id === 'peacock' ? 'rgba(255, 215, 0, 0.5)' : theme.boardLineColor + '20',
+                boxShadow: theme.id === 'peacock' ? '0 8px 32px 0 rgba(0, 0, 0, 0.6)' : 'none'
               }}
             >
-              {getStatusMessage()}
-            </div>
-
-            {/* Board */}
-            <div className="w-full max-w-[min(100vw-1rem,500px)]">
-              <MorrisBoard
-                gameState={gameState}
-                onPositionClick={handlePositionClick}
-                disabled={!isPlayerTurn || !opponentConnected}
-                flipped={playerColor === 'black'}
-                themeId={profile?.theme_id}
-              />
-            </div>
-          </div>
-
-          {/* Bottom Player Bar (You - White) */}
-          <div
-            className="border-t px-3 py-3 flex items-center justify-between transition-all shrink-0"
-            style={{
-              backgroundColor: theme.cardBg,
-              borderColor: theme.boardLineColor + '20',
-              borderLeftWidth: gameState.currentPlayer === 'white' ? '4px' : '0px',
-              borderLeftColor: gameState.currentPlayer === 'white' ? theme.accentColor : 'transparent',
-            }}
-          >
-            <div className="flex items-center gap-3 flex-1 min-w-0">
               <div
-                className="w-10 h-10 rounded-full border-2 shadow-lg flex items-center justify-center text-xs shrink-0 transition-all"
+                className="w-16 h-16 mx-auto mb-6 rounded-full flex items-center justify-center shadow-lg"
                 style={{
-                  background: theme.whitePiece.bg,
-                  borderColor: gameState.currentPlayer === 'white' ? theme.accentColor : theme.whitePiece.border,
-                  borderWidth: gameState.currentPlayer === 'white' ? '3px' : '2px',
-                  color: theme.whitePiece.color,
-                  boxShadow: gameState.currentPlayer === 'white' ? `0 0 20px ${theme.accentColor}` : '0 4px 8px rgba(0,0,0,0.3)'
+                  backgroundColor: theme.accentColor,
+                  filter: theme.id === 'peacock' ? 'drop-shadow(0 0 10px rgba(255, 215, 0, 0.6))' : 'none'
                 }}
               >
-                {theme.whitePiece.content}
+                <Users className="w-8 h-8 text-white" />
               </div>
-              <div className="flex-1 min-w-0">
-                <div 
-                  className="text-sm truncate transition-all"
-                  style={{ 
-                    color: gameState.currentPlayer === 'white' ? theme.accentColor : theme.textColor,
-                    fontWeight: gameState.currentPlayer === 'white' ? '800' : '600',
-                    fontSize: gameState.currentPlayer === 'white' ? '0.95rem' : '0.875rem'
+              <h2 className="text-2xl font-bold mb-2" style={{ color: theme.headingColor }}>Waiting for Opponent</h2>
+              <p className="text-sm opacity-80 mb-6" style={{ color: theme.textColor }}>Share this code with a friend to start the game.</p>
+
+              <div
+                className="block p-5 text-3xl font-mono mb-6 rounded-lg border tracking-wider"
+                style={{
+                  backgroundColor: theme.appBackground,
+                  borderColor: theme.boardLineColor + '10',
+                  color: theme.textColor
+                }}
+              >
+                {roomId}
+              </div>
+
+              <Button
+                onClick={copyRoomCode}
+                className="w-full mb-4 font-bold h-12 text-lg transition-transform hover:scale-105"
+                style={{
+                  backgroundColor: theme.id === 'peacock' ? '#ffd700' : theme.accentColor,
+                  color: theme.id === 'peacock' ? '#000' : '#fff'
+                }}
+              >
+                <Copy className="w-5 h-5 mr-3" />
+                Copy Room Code
+              </Button>
+
+              <div className="flex items-center justify-center gap-3 opacity-60" style={{ color: theme.textColor }}>
+                <Loader2 className="w-5 h-5 animate-spin" />
+                <span className="font-medium">Waiting for player to connect...</span>
+              </div>
+            </motion.div>
+          </div>
+        ) : (
+          <div className="flex-1 flex lg:flex-row h-full overflow-hidden">
+            {/* Main Board Area */}
+            <div className="flex-1 flex flex-col h-full relative">
+              <div className="px-4 py-3 flex items-center justify-between shrink-0 border-b z-10 transition-all duration-300"
+                style={{
+                  backgroundColor: gameState.currentPlayer !== playerColor ? 'rgba(0, 15, 20, 0.95)' : 'transparent',
+                  borderBottom: gameState.currentPlayer !== playerColor ? '2px solid rgba(255, 255, 255, 0.2)' : 'none',
+                  opacity: gameState.currentPlayer !== playerColor ? 1.0 : 0.4,
+                  boxShadow: gameState.currentPlayer !== playerColor ? '0 0 15px rgba(0, 0, 0, 0.5)' : 'none'
+                }}>
+                <div className="flex items-center gap-3 flex-1 min-w-0">
+                  <div className="w-12 h-12 rounded-full border-2 flex items-center justify-center text-sm shrink-0 font-bold" style={{
+                    background: playerColor === 'white' ? theme.blackPiece.bg : theme.whitePiece.bg,
+                    borderColor: gameState.currentPlayer === (playerColor === 'white' ? 'black' : 'white') ? theme.accentColor : 'transparent',
+                    color: playerColor === 'white' ? theme.blackPiece.color : theme.whitePiece.color
+                  }}>
+                    {playerColor === 'white' ? theme.blackPiece.content : theme.whitePiece.content}
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <div className="text-base font-bold truncate" style={{ color: gameState.currentPlayer === (playerColor === 'white' ? 'black' : 'white') ? theme.accentColor : '#ffffff' }}>
+                      {playerColor === 'white'
+                        ? (theme.blackPlayerName || blackName)
+                        : (theme.whitePlayerName || whiteName)}
+                    </div>
+                    <div className="text-xs opacity-70 truncate text-white">
+                      {playerColor === 'white' ? `${TOTAL_PIECES - gameState.blackPiecesPlaced} left • ${gameState.blackPiecesOnBoard} total` : `${TOTAL_PIECES - gameState.whitePiecesPlaced} left • ${gameState.whitePiecesOnBoard} total`}
+                    </div>
+                  </div>
+                </div>
+                <div className={`px-3 py-1.5 rounded-md font-mono text-lg font-bold min-w-[70px] text-center ${(playerColor === 'white' ? blackTimer : whiteTimer) < 10 ? 'animate-pulse text-red-500' : ''}`} style={{ backgroundColor: theme.appBackground + '80', color: (playerColor === 'white' ? blackTimer : whiteTimer) < 10 ? '#ef4444' : theme.textColor }}>
+                  {formatTime(playerColor === 'white' ? blackTimer : whiteTimer)}
+                </div>
+              </div>
+
+              {/* Board Area */}
+              <div className="flex-1 flex flex-col items-center justify-center p-4 overflow-hidden relative">
+                <motion.div
+                  className="px-4 py-1.5 rounded-full text-xs font-bold mb-3 z-10 shadow-lg border-2 flex items-center gap-2"
+                  animate={{ scale: [1, 1.05, 1] }}
+                  transition={{ duration: 2, repeat: Infinity }}
+                  style={{
+                    backgroundColor: theme.id === 'peacock'
+                      ? (gameState.currentPlayer === 'white' ? 'rgba(0, 255, 127, 0.2)' : 'rgba(0, 0, 255, 0.2)')
+                      : theme.accentColor + '15',
+                    borderColor: theme.id === 'peacock'
+                      ? (gameState.currentPlayer === 'white' ? '#00FF7F' : '#00FFFF')
+                      : theme.accentColor + '40',
+                    color: theme.id === 'peacock'
+                      ? (gameState.currentPlayer === 'white' ? '#00FF7F' : '#00FFFF')
+                      : theme.textColor,
+                    boxShadow: theme.id === 'peacock'
+                      ? `0 0 15px ${gameState.currentPlayer === 'white' ? 'rgba(0, 255, 127, 0.4)' : 'rgba(0, 255, 255, 0.4)'}`
+                      : 'none'
                   }}
                 >
-                  {whiteName}
+                  {theme.id === 'peacock'
+                    ? `${gameState.currentPlayer === 'white' ? 'EMERALD' : 'SAPPHIRE'}'S TURN`
+                    : getStatusMessage()
+                  }
+                </motion.div>
+                <div className="w-full max-w-[min(100vw-2rem,500px)] aspect-square">
+                  <MorrisBoard
+                    gameState={displayState}
+                    onPositionClick={handlePositionClick}
+                    disabled={!isPlayerTurn || !opponentConnected || isReviewMode}
+                    flipped={playerColor === 'black'}
+                    themeId={profile?.theme_id}
+                  />
                 </div>
-                <div className="text-[11px] opacity-70 truncate" style={{ color: theme.textColor }}>
-                  {TOTAL_PIECES - gameState.whitePiecesPlaced} to place • {gameState.whitePiecesOnBoard} on board
+
+                {/* Draw Offer Dialog */}
+                {incomingDrawOffer && (
+                  <div className="absolute inset-0 z-50 flex items-center justify-center p-6 bg-black/60 backdrop-blur-sm">
+                    <div className="w-full max-w-xs p-6 rounded-2xl shadow-2xl border flex flex-col items-center text-center" style={{ backgroundColor: theme.cardBg, borderColor: theme.accentColor + '40' }}>
+                      <div className="w-16 h-16 bg-blue-500/20 rounded-full flex items-center justify-center mb-4 text-3xl">🤝</div>
+                      <h3 className="text-xl font-bold mb-2" style={{ color: theme.textColor }}>Draw Offered</h3>
+                      <p className="text-sm opacity-80 mb-6" style={{ color: theme.textColor }}>
+                        {incomingDrawOffer.from_player_name} is offering a draw.
+                      </p>
+                      <div className="flex w-full gap-3">
+                        <Button onClick={handleDeclineDraw} variant="outline" className="flex-1 font-bold">Decline</Button>
+                        <Button onClick={handleAcceptDraw} className="flex-1 font-bold bg-blue-600 hover:bg-blue-700">Accept</Button>
+                      </div>
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              {/* Bottom Player Bar */}
+              <div className="px-4 py-3 flex items-center justify-between shrink-0 border-t z-10 transition-all duration-300"
+                style={{
+                  backgroundColor: gameState.currentPlayer === playerColor ? 'rgba(0, 15, 20, 0.95)' : 'transparent',
+                  borderTop: gameState.currentPlayer === playerColor ? '2px solid rgba(255, 255, 255, 0.2)' : 'none',
+                  opacity: gameState.currentPlayer === playerColor ? 1.0 : 0.4,
+                  boxShadow: gameState.currentPlayer === playerColor ? '0 0 15px rgba(0, 0, 0, 0.5)' : 'none'
+                }}>
+                <div className="flex items-center gap-3 flex-1 min-w-0">
+                  <div className="w-12 h-12 rounded-full border-2 flex items-center justify-center text-sm shrink-0 font-bold" style={{
+                    background: playerColor === 'white' ? theme.whitePiece.bg : theme.blackPiece.bg,
+                    borderColor: gameState.currentPlayer === playerColor ? theme.accentColor : 'transparent',
+                    color: playerColor === 'white' ? theme.whitePiece.color : theme.blackPiece.color
+                  }}>
+                    {playerColor === 'white' ? theme.whitePiece.content : theme.blackPiece.content}
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <div className="text-base font-bold truncate" style={{ color: gameState.currentPlayer === playerColor ? theme.accentColor : '#ffffff' }}>
+                      {playerColor === 'white'
+                        ? (theme.whitePlayerName || whiteName)
+                        : (theme.blackPlayerName || blackName)} (You)
+                    </div>
+                    <div className="text-xs opacity-70 truncate text-white">
+                      {playerColor === 'white' ? `${TOTAL_PIECES - gameState.whitePiecesPlaced} left • ${gameState.whitePiecesOnBoard} total` : `${TOTAL_PIECES - gameState.blackPiecesPlaced} left • ${gameState.blackPiecesOnBoard} total`}
+                    </div>
+                  </div>
+                </div>
+                <div className={`px-3 py-1.5 rounded-md font-mono text-lg font-bold min-w-[70px] text-center ${(playerColor === 'white' ? whiteTimer : blackTimer) < 10 ? 'animate-pulse text-red-500' : ''}`} style={{ backgroundColor: theme.appBackground + '80', color: (playerColor === 'white' ? whiteTimer : blackTimer) < 10 ? '#ef4444' : theme.textColor }}>
+                  {formatTime(playerColor === 'white' ? whiteTimer : blackTimer)}
+                </div>
+              </div>
+
+              {/* Nav Icons (Mobile Only) */}
+              <div className="lg:hidden px-2 py-3 flex items-center justify-around shrink-0 border-t z-10 font-bold" style={{ backgroundColor: theme.headerBg, borderColor: theme.boardLineColor + '20' }}>
+                {gameState.phase === 'gameOver' || roomStatus === 'finished' ? (
+                  <>
+                    {!opponentDisconnected && <Button onClick={handlePlayAgain} variant="ghost" className="flex flex-col h-auto py-2" style={{ color: theme.textColor }}><RefreshCw className="w-5 h-5 mb-1" /><span className="text-[10px]">Retry</span></Button>}
+                    <Button variant="ghost" onClick={onBack} className="flex flex-col h-auto py-2" style={{ color: theme.textColor }}><Home className="w-5 h-5 mb-1" /><span className="text-[10px]">Menu</span></Button>
+                    <Button
+                      variant="ghost"
+                      onClick={handleBackHistory}
+                      disabled={!gameState.historyStates || gameState.historyStates.length <= 1 || currentHistoryIndex === 0}
+                      className="flex flex-col h-auto py-2"
+                      style={{ color: theme.textColor }}
+                    >
+                      <ChevronLeft className="w-5 h-5 mb-1" />
+                      <span className="text-[10px] font-bold">Back</span>
+                    </Button>
+                    <Button
+                      variant="ghost"
+                      onClick={handleForwardHistory}
+                      disabled={!isReviewMode}
+                      className="flex flex-col h-auto py-2"
+                      style={{ color: theme.textColor }}
+                    >
+                      <ChevronRight className="w-5 h-5 mb-1" />
+                      <span className="text-[10px] font-bold">Forward</span>
+                    </Button>
+                  </>
+                ) : (
+                  <div className="flex flex-col w-full gap-2">
+                    {/* History Scrubber */}
+                    {(gameState.historyStates?.length || 0) > 1 && (
+                      <div className="px-4 flex items-center gap-3">
+                        <span className="text-[10px] font-bold min-w-[40px]" style={{ color: theme.textColor }}>
+                          {currentHistoryIndex === -1 ? gameState.historyStates!.length : currentHistoryIndex + 1} / {gameState.historyStates!.length}
+                        </span>
+                        <input
+                          type="range"
+                          min="0"
+                          max={(gameState.historyStates?.length || 1) - 1}
+                          value={currentHistoryIndex === -1 ? (gameState.historyStates?.length || 1) - 1 : currentHistoryIndex}
+                          onChange={(e) => {
+                            const val = parseInt(e.target.value);
+                            if (val === (gameState.historyStates?.length || 1) - 1) {
+                              setIsReviewMode(false);
+                              setCurrentHistoryIndex(-1);
+                            } else {
+                              setIsReviewMode(true);
+                              setCurrentHistoryIndex(val);
+                            }
+                          }}
+                          className="flex-1 h-1 bg-gray-700 rounded-lg appearance-none cursor-pointer accent-blue-500"
+                        />
+                        {isReviewMode && (
+                          <Button
+                            size="sm"
+                            variant="ghost"
+                            onClick={() => { setIsReviewMode(false); setCurrentHistoryIndex(-1); }}
+                            className="h-6 px-2 text-[8px] uppercase tracking-wider font-black bg-blue-500/20 text-blue-400"
+                          >
+                            Live
+                          </Button>
+                        )}
+                      </div>
+                    )}
+
+                    <div className="flex items-center justify-around w-full">
+                      {/* Options Menu Button (Hamburger) */}
+                      <Button
+                        variant="ghost"
+                        onClick={() => setIsMenuOpen(true)}
+                        className="flex flex-col h-auto py-2 px-4"
+                        style={{ color: theme.textColor }}
+                      >
+                        <Menu className="w-5 h-5 mb-1" />
+                        <span className="text-[10px] font-bold">Menu</span>
+                      </Button>
+
+                      {/* Chat Button */}
+                      <Button variant="ghost" onClick={() => setIsChatOpen(true)} className="flex flex-col h-auto py-2 px-4 relative" style={{ color: theme.textColor }}>
+                        <MessageSquare className="w-5 h-5 mb-1" />
+                        {unreadMessages > 0 && !isChatOpen && <span className="absolute top-1 right-3 bg-red-500 text-white text-[8px] w-4 h-4 flex items-center justify-center rounded-full font-bold">{unreadMessages}</span>}
+                        <span className="text-[10px] font-bold">Chat</span>
+                      </Button>
+
+                      {/* Back Button */}
+                      <Button
+                        variant="ghost"
+                        onClick={handleBackHistory}
+                        disabled={!gameState.historyStates || gameState.historyStates.length <= 1 || currentHistoryIndex === 0}
+                        className={`flex flex-col h-auto py-2 px-4 ${(gameState.historyStates?.length || 0) <= 1 ? 'opacity-30' : ''}`}
+                        style={{ color: theme.textColor }}
+                      >
+                        <ChevronLeft className="w-5 h-5 mb-1" />
+                        <span className="text-[10px] font-bold">Back</span>
+                      </Button>
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              {/* Options Menu Overlay */}
+              {isMenuOpen && (
+                <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/60 backdrop-blur-sm" onClick={() => setIsMenuOpen(false)}>
+                  <div
+                    className="w-full sm:w-80 p-6 rounded-t-2xl sm:rounded-2xl border shadow-2xl space-y-4 animate-in slide-in-from-bottom-10 fade-in"
+                    style={{ backgroundColor: theme.cardBg, borderColor: theme.lineColor + '20' }}
+                    onClick={e => e.stopPropagation()}
+                  >
+                    <div className="flex items-center justify-between mb-2">
+                      <h3 className="text-lg font-bold" style={{ color: theme.textColor }}>Game Options</h3>
+                      <Button variant="ghost" size="sm" onClick={() => setIsMenuOpen(false)}>✕</Button>
+                    </div>
+
+                    <Button
+                      onClick={() => { handleSendDrawOffer(); setIsMenuOpen(false); }}
+                      variant="outline"
+                      className="w-full justify-start h-12 text-base font-medium"
+                      style={{ borderColor: theme.lineColor + '40' }}
+                    >
+                      <Handshake className="mr-3 w-5 h-5" /> Offer Draw
+                    </Button>
+
+                    <Button
+                      onClick={() => { handleAbort(); setIsMenuOpen(false); }}
+                      variant="outline"
+                      className="w-full justify-start h-12 text-base font-medium text-red-500 hover:text-red-600 hover:bg-red-500/10"
+                      style={{ borderColor: theme.lineColor + '40' }}
+                    >
+                      <Flag className="mr-3 w-5 h-5" /> Abort Game
+                    </Button>
+                  </div>
+                </div>
+              )}
+
+
+              {/* Chat Drawer (Mobile Only) */}
+              {roomStatus !== 'loading' && roomStatus !== 'error' && (
+                <div className="lg:hidden">
+                  <GameChat
+                    roomId={roomId}
+                    playerId={playerId}
+                    playerName={playerName}
+                    themeId={profile?.theme_id}
+                    isOpen={isChatOpen}
+                    onClose={() => setIsChatOpen(false)}
+                    onUnreadChange={setUnreadMessages}
+                    variant="drawer"
+                  />
+                </div>
+              )}
+            </div>
+
+            {/* Desktop Sidebar */}
+            <div className="hidden lg:flex w-96 flex-col border-l z-20" style={{ backgroundColor: theme.cardBg, borderColor: theme.boardLineColor + '20' }}>
+              <div className="p-4 border-b flex items-center justify-between" style={{ backgroundColor: theme.headerBg, borderColor: theme.lineColor + '20' }}>
+                <div className="flex items-center gap-2">
+                  <Users className="w-5 h-5" style={{ color: theme.accentColor }} />
+                  <span className="font-bold" style={{ color: theme.textColor }}>Game Room</span>
+                </div>
+                <Button size="sm" variant="outline" onClick={copyRoomCode} className="h-8 text-xs gap-2">
+                  {copied ? <Check className="w-3 h-3 text-green-500" /> : <Copy className="w-3 h-3" />} {roomId}
+                </Button>
+              </div>
+
+              {/* Desktop Controls & History */}
+              <div className="p-4 border-b space-y-4" style={{ borderColor: theme.lineColor + '10' }}>
+                <div className="grid grid-cols-2 gap-2">
+                  <Button
+                    onClick={handleSendDrawOffer}
+                    variant="outline"
+                    size="sm"
+                    className="w-full text-xs"
+                    style={{ borderColor: theme.lineColor + '40', color: theme.textColor }}
+                    disabled={gameState.phase === 'gameOver'}
+                  >
+                    <Handshake className="mr-2 w-3 h-3" /> Offer Draw
+                  </Button>
+                  <Button
+                    onClick={handleAbort}
+                    variant="outline"
+                    size="sm"
+                    className="w-full text-xs text-red-500 hover:text-red-600 hover:bg-red-500/10"
+                    style={{ borderColor: theme.lineColor + '40' }}
+                    disabled={gameState.phase === 'gameOver'}
+                  >
+                    <Flag className="mr-2 w-3 h-3" /> Abort
+                  </Button>
+                </div>
+
+                {/* Play Again (Desktop) */}
+                {(gameState.phase === 'gameOver' || roomStatus === 'finished') && !opponentDisconnected && (
+                  <Button
+                    onClick={handlePlayAgain}
+                    className="w-full font-bold animate-pulse"
+                    style={{ backgroundColor: theme.accentColor, color: '#fff' }}
+                  >
+                    <RefreshCw className="mr-2 w-4 h-4" /> Play Again
+                  </Button>
+                )}
+
+                {/* Desktop History Controls */}
+                {(gameState.historyStates?.length || 0) > 1 && (
+                  <div className="bg-black/5 rounded-lg p-3 space-y-2">
+                    <div className="flex items-center justify-between text-xs font-bold mb-1" style={{ color: theme.textColor }}>
+                      <span>Move History</span>
+                      <span>{currentHistoryIndex === -1 ? gameState.historyStates!.length : currentHistoryIndex + 1} / {gameState.historyStates!.length}</span>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="h-8 w-8"
+                        onClick={handleBackHistory}
+                        disabled={!gameState.historyStates || gameState.historyStates.length <= 1 || currentHistoryIndex === 0}
+                      >
+                        <ChevronLeft className="w-4 h-4" />
+                      </Button>
+
+                      <input
+                        type="range"
+                        min="0"
+                        max={(gameState.historyStates?.length || 1) - 1}
+                        value={currentHistoryIndex === -1 ? (gameState.historyStates?.length || 1) - 1 : currentHistoryIndex}
+                        onChange={(e) => {
+                          const val = parseInt(e.target.value);
+                          if (val === (gameState.historyStates?.length || 1) - 1) {
+                            setIsReviewMode(false);
+                            setCurrentHistoryIndex(-1);
+                          } else {
+                            setIsReviewMode(true);
+                            setCurrentHistoryIndex(val);
+                          }
+                        }}
+                        className="flex-1 h-1 bg-gray-500 rounded-lg appearance-none cursor-pointer accent-blue-500"
+                      />
+
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="h-8 w-8"
+                        onClick={handleForwardHistory}
+                        disabled={!isReviewMode}
+                      >
+                        <ChevronRight className="w-4 h-4" />
+                      </Button>
+                    </div>
+                    {isReviewMode && (
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        onClick={() => { setIsReviewMode(false); setCurrentHistoryIndex(-1); }}
+                        className="w-full h-6 text-[10px] uppercase font-black bg-blue-500/10 text-blue-500 hover:bg-blue-500/20"
+                      >
+                        Return to Live Game
+                      </Button>
+                    )}
+                  </div>
+                )}
+              </div>
+
+              {/* Desktop Inline Chat */}
+              <div className="flex-1 overflow-hidden flex flex-col">
+                <div className="px-4 py-2 text-xs font-bold opacity-50 uppercase tracking-widest" style={{ color: theme.textColor }}>Chat</div>
+                <div className="flex-1 overflow-hidden relative">
+                  <GameChat
+                    roomId={roomId}
+                    playerId={playerId}
+                    playerName={playerName}
+                    themeId={profile?.theme_id}
+                    isOpen={true}
+                    onClose={() => { }}
+                    variant="inline"
+                  />
                 </div>
               </div>
             </div>
-            {gameState.currentPlayer === 'white' && (
-              <div className="flex items-center gap-1.5 shrink-0">
-                <span className="text-[10px] font-bold uppercase tracking-wide" style={{ color: theme.accentColor }}>
-                  {playerColor === 'white' ? 'Your turn' : 'Their turn'}
-                </span>
-                <div 
-                  className="w-2.5 h-2.5 rounded-full animate-pulse shrink-0"
-                  style={{ backgroundColor: theme.accentColor }}
-                />
-              </div>
-            )}
           </div>
-
-          {/* Bottom Action Bar */}
-          <div
-            className="border-t px-3 py-2 flex items-center justify-between gap-2 shrink-0"
-            style={{ backgroundColor: theme.headerBg, borderColor: theme.boardLineColor + '20' }}
-          >
-            {gameState.phase === 'gameOver' ? (
-              <div className="flex gap-2 w-full">
-                {!opponentDisconnected && (
-                  <Button
-                    onClick={handlePlayAgain}
-                    className="flex-1 h-10 font-bold text-sm"
-                    style={{ backgroundColor: theme.accentColor, color: '#fff' }}
-                  >
-                    <RefreshCw className="w-4 h-4 mr-1" />
-                    Play Again
-                  </Button>
-                )}
-                <Button
-                  variant="outline"
-                  onClick={onBack}
-                  className="flex-1 h-10 text-sm"
-                  style={{ borderColor: theme.lineColor + '20', color: theme.textColor }}
-                >
-                  <Home className="w-4 h-4 mr-1" />
-                  {opponentDisconnected ? 'New Game' : 'Menu'}
-                </Button>
-              </div>
-            ) : (
-              <>
-                <div className="flex items-center gap-2 text-xs" style={{ color: theme.textColor }}>
-                  <span className="opacity-60">Phase:</span>
-                  <span className="font-bold capitalize">{gameState.phase}</span>
-                </div>
-                <div className="flex items-center gap-2 text-xs">
-                  <span className="opacity-60" style={{ color: theme.textColor }}>Status:</span>
-                  <span className="font-bold" style={{ color: opponentConnected ? theme.accentColor : '#ef4444' }}>
-                    {opponentConnected ? 'Connected' : 'Disconnected'}
-                  </span>
-                </div>
-              </>
-            )}
-          </div>
-
-          {/* Integrated Chat - Always Visible at Bottom */}
-          {roomStatus !== 'loading' && roomStatus !== 'error' && (
-            <GameChat
-              roomId={roomId}
-              playerId={playerId}
-              playerName={playerName}
-              themeId={profile?.theme_id}
-            />
-          )}
-        </>
-      )}
+        )}
+      </div>
     </div>
   );
 }
-

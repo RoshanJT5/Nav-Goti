@@ -16,6 +16,7 @@ export interface GameState {
   mustRemove: boolean;
   winner: Player | null;
   moveHistory: string[];
+  historyStates?: any[];
 }
 
 export const TOTAL_PIECES = 9;
@@ -106,6 +107,7 @@ export function createInitialState(): GameState {
     mustRemove: false,
     winner: null,
     moveHistory: [],
+    historyStates: [],
   };
 }
 
@@ -214,18 +216,30 @@ export function placePiece(state: GameState, position: Position): GameState {
     moveHistory: [...state.moveHistory, `${state.currentPlayer} placed at ${position}`],
   };
 
-  if (checkMill(newBoard, position, state.currentPlayer)) {
-    return { ...newState, mustRemove: true };
-  }
-
   const nextPlayer = state.currentPlayer === 'white' ? 'black' : 'white';
   const bothPlaced = newState.whitePiecesPlaced >= TOTAL_PIECES && newState.blackPiecesPlaced >= TOTAL_PIECES;
 
-  return {
+  const finalState: GameState = {
     ...newState,
-    currentPlayer: nextPlayer,
+    currentPlayer: checkMill(newBoard, position, state.currentPlayer) ? state.currentPlayer : nextPlayer,
+    mustRemove: checkMill(newBoard, position, state.currentPlayer),
     phase: bothPlaced ? 'moving' : 'placing',
   };
+
+  finalState.historyStates = [...(state.historyStates || []), {
+    board: [...newBoard],
+    currentPlayer: finalState.currentPlayer,
+    phase: finalState.phase,
+    whitePiecesPlaced: finalState.whitePiecesPlaced,
+    blackPiecesPlaced: finalState.blackPiecesPlaced,
+    whitePiecesOnBoard: finalState.whitePiecesOnBoard,
+    blackPiecesOnBoard: finalState.blackPiecesOnBoard,
+    mustRemove: finalState.mustRemove,
+    winner: finalState.winner,
+    moveHistory: finalState.moveHistory
+  }];
+
+  return finalState;
 }
 
 export function selectPiece(state: GameState, position: Position): GameState {
@@ -262,19 +276,32 @@ export function movePiece(state: GameState, from: Position, to: Position): GameS
     moveHistory: [...state.moveHistory, `${state.currentPlayer} moved from ${from} to ${to}`],
   };
 
-  if (checkMill(newBoard, to, state.currentPlayer)) {
-    return { ...newState, mustRemove: true };
-  }
-
+  const isMill = checkMill(newBoard, to, state.currentPlayer);
   const nextPlayer = state.currentPlayer === 'white' ? 'black' : 'white';
-  const gameResult = checkGameOver({ ...newState, currentPlayer: nextPlayer });
+  const gameResult = checkGameOver({ ...newState, currentPlayer: isMill ? state.currentPlayer : nextPlayer });
 
-  return {
+  const finalState: GameState = {
     ...newState,
-    currentPlayer: nextPlayer,
+    currentPlayer: isMill ? state.currentPlayer : nextPlayer,
     phase: gameResult.isOver ? 'gameOver' : 'moving',
     winner: gameResult.winner,
+    mustRemove: isMill
   };
+
+  finalState.historyStates = [...(state.historyStates || []), {
+    board: [...newBoard],
+    currentPlayer: finalState.currentPlayer,
+    phase: finalState.phase,
+    whitePiecesPlaced: finalState.whitePiecesPlaced,
+    blackPiecesPlaced: finalState.blackPiecesPlaced,
+    whitePiecesOnBoard: finalState.whitePiecesOnBoard,
+    blackPiecesOnBoard: finalState.blackPiecesOnBoard,
+    mustRemove: finalState.mustRemove,
+    winner: finalState.winner,
+    moveHistory: finalState.moveHistory
+  }];
+
+  return finalState;
 }
 
 export function removePiece(state: GameState, position: Position): GameState {
@@ -300,12 +327,27 @@ export function removePiece(state: GameState, position: Position): GameState {
   const bothPlaced = newState.whitePiecesPlaced >= TOTAL_PIECES && newState.blackPiecesPlaced >= TOTAL_PIECES;
   const gameResult = checkGameOver({ ...newState, currentPlayer: nextPlayer });
 
-  return {
+  const finalState: GameState = {
     ...newState,
     currentPlayer: nextPlayer,
     phase: gameResult.isOver ? 'gameOver' : bothPlaced ? 'moving' : 'placing',
     winner: gameResult.winner,
   };
+
+  finalState.historyStates = [...(state.historyStates || []), {
+    board: [...newBoard],
+    currentPlayer: finalState.currentPlayer,
+    phase: finalState.phase,
+    whitePiecesPlaced: finalState.whitePiecesPlaced,
+    blackPiecesPlaced: finalState.blackPiecesPlaced,
+    whitePiecesOnBoard: finalState.whitePiecesOnBoard,
+    blackPiecesOnBoard: finalState.blackPiecesOnBoard,
+    mustRemove: finalState.mustRemove,
+    winner: finalState.winner,
+    moveHistory: finalState.moveHistory
+  }];
+
+  return finalState;
 }
 
 export function getPositionName(position: Position): string {

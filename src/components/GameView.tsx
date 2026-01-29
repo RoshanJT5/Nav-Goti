@@ -189,21 +189,28 @@ export function GameView({
 
   const getStatusMessage = () => {
     if (gameState.phase === 'gameOver') {
-      return `${gameState.winner === 'white' ? 'White' : 'Black'} wins!`;
+      const winnerName = gameState.winner === 'white'
+        ? (theme.whitePlayerName || 'White')
+        : (theme.blackPlayerName || 'Black');
+      return `${winnerName} wins!`;
     }
     if (isAIThinking) {
       return 'Computer is thinking...';
     }
+    const currentPlayerName = gameState.currentPlayer === 'white'
+      ? (theme.whitePlayerName || 'White')
+      : (theme.blackPlayerName || 'Black');
+
     if (gameState.mustRemove) {
-      return `${gameState.currentPlayer === 'white' ? 'White' : 'Black'}: Remove a piece!`;
+      return `${currentPlayerName}: Remove a piece!`;
     }
     if (gameState.phase === 'placing') {
-      return `${gameState.currentPlayer === 'white' ? 'White' : 'Black'}: Place a piece`;
+      return `${currentPlayerName}: Place a piece`;
     }
     if (gameState.selectedPiece !== null) {
-      return `${gameState.currentPlayer === 'white' ? 'White' : 'Black'}: Move piece`;
+      return `${currentPlayerName}: Move piece`;
     }
-    return `${gameState.currentPlayer === 'white' ? 'White' : 'Black'}: Select a piece`;
+    return `${currentPlayerName}: Select a piece`;
   };
 
   const getStatusIcon = () => {
@@ -215,14 +222,33 @@ export function GameView({
     return <Info className="w-5 h-5" />;
   };
 
-  const whiteName = mode === 'ai' ? (profile?.name || 'You') : 'White';
-  const blackName = mode === 'ai' ? 'Computer' : 'Black';
+  const whiteName = mode === 'ai' ? (profile?.name || 'You') : (theme.whitePlayerName || 'White');
+  const blackName = mode === 'ai' ? 'Computer' : (theme.blackPlayerName || 'Black');
 
   return (
     <div
-      className="h-screen flex flex-col overflow-hidden transition-colors duration-500"
-      style={{ backgroundColor: theme.appBackground }}
+      className="h-screen flex flex-col overflow-hidden transition-all duration-500 relative"
+      style={{
+        background: theme.id === 'peacock' ? 'transparent' : theme.appBackground,
+        backgroundAttachment: 'fixed',
+      }}
     >
+      {/* Background Atmosphere Layer */}
+      <div className={theme.id === 'peacock' ? 'peacock-atmosphere' : ''} />
+
+      {/* Background Texture Layer */}
+      {theme.bgImage && (
+        <div
+          className={`absolute inset-0 pointer-events-none z-0 ${theme.id === 'peacock' ? 'peacock-feather-pattern' : ''}`}
+          style={{
+            backgroundImage: `url(${theme.bgImage})`,
+            backgroundSize: 'cover',
+            backgroundPosition: 'center',
+            backgroundAttachment: 'fixed',
+            opacity: theme.bgImageOpacity ?? 1,
+          }}
+        />
+      )}
       {/* Compact Header */}
       <header
         className="border-b px-3 py-2 transition-colors duration-500 flex-shrink-0"
@@ -257,9 +283,11 @@ export function GameView({
       <div
         className="px-4 py-3 border-b flex items-center justify-between flex-shrink-0"
         style={{
-          backgroundColor: theme.cardBg,
-          borderColor: theme.boardLineColor + '20',
-          opacity: gameState.currentPlayer === 'black' ? 1 : 0.6
+          backgroundColor: gameState.currentPlayer === 'black' ? 'rgba(0, 15, 20, 0.95)' : 'transparent',
+          borderBottom: gameState.currentPlayer === 'black' ? '2px solid rgba(255, 255, 255, 0.2)' : 'none',
+          opacity: gameState.currentPlayer === 'black' ? 1.0 : 0.4,
+          boxShadow: gameState.currentPlayer === 'black' ? '0 0 15px rgba(0, 0, 0, 0.5)' : 'none',
+          transition: 'all 0.3s ease-in-out'
         }}
       >
         <div className="flex items-center gap-3">
@@ -270,8 +298,8 @@ export function GameView({
             {mode === 'ai' ? <Cpu className="w-5 h-5" /> : blackName.charAt(0)}
           </div>
           <div>
-            <div className="font-bold text-sm" style={{ color: theme.textColor }}>{blackName}</div>
-            <div className="text-xs opacity-60" style={{ color: theme.textColor }}>
+            <div className="font-bold text-sm text-white">{blackName}</div>
+            <div className="text-xs opacity-60 text-white">
               {TOTAL_PIECES - gameState.blackPiecesPlaced} to place, {gameState.blackPiecesOnBoard} on board
             </div>
           </div>
@@ -303,26 +331,35 @@ export function GameView({
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: -10 }}
             transition={{ duration: 0.2 }}
-            className="mt-3 px-4 py-2 rounded-full border flex items-center gap-2 text-sm font-bold"
+            className={`px-4 py-1.5 rounded-full flex items-center gap-2 font-bold shadow-lg border-2 z-10 transition-colors duration-500`}
             style={{
-              backgroundColor: gameState.phase === 'gameOver'
-                ? theme.accentColor
-                : gameState.mustRemove
-                  ? '#ef4444'
-                  : theme.cardBg,
-              borderColor: theme.boardLineColor + '20',
-              color: gameState.phase === 'gameOver' || gameState.mustRemove ? '#fff' : theme.textColor
+              backgroundColor: theme.id === 'peacock'
+                ? (gameState.currentPlayer === 'white' ? 'rgba(0, 255, 127, 0.2)' : 'rgba(0, 0, 255, 0.2)')
+                : (gameState.phase === 'gameOver' || gameState.mustRemove ? '#ef4444' : theme.accentColor),
+              borderColor: theme.id === 'peacock'
+                ? (gameState.currentPlayer === 'white' ? '#00FF7F' : '#00FFFF')
+                : (gameState.phase === 'gameOver' || gameState.mustRemove ? '#dc2626' : theme.mutedColor),
+              color: theme.id === 'peacock'
+                ? (gameState.currentPlayer === 'white' ? '#00FF7F' : '#00FFFF')
+                : '#fff',
+              boxShadow: theme.id === 'peacock'
+                ? `0 0 15px ${gameState.currentPlayer === 'white' ? 'rgba(0, 255, 127, 0.4)' : 'rgba(0, 255, 255, 0.4)'}`
+                : 'none'
             }}
           >
             {getStatusIcon()}
             <span className="text-xs sm:text-sm">
               {gameState.phase === 'gameOver'
                 ? `${gameState.winner === 'white' ? whiteName : blackName} wins!`
-                : gameState.mustRemove
-                  ? 'Remove piece!'
-                  : gameState.phase === 'placing'
-                    ? 'Place piece'
-                    : 'Move piece'
+                : (theme.id === 'peacock'
+                  ? `${gameState.currentPlayer === 'white' ? 'EMERALD' : 'SAPPHIRE'}'S TURN`
+                  : (gameState.mustRemove
+                    ? 'Remove piece!'
+                    : gameState.phase === 'placing'
+                      ? 'Place piece'
+                      : 'Move piece'
+                  )
+                )
               }
             </span>
           </motion.div>
@@ -333,9 +370,11 @@ export function GameView({
       <div
         className="px-4 py-3 border-t flex items-center justify-between flex-shrink-0"
         style={{
-          backgroundColor: theme.cardBg,
-          borderColor: theme.boardLineColor + '20',
-          opacity: gameState.currentPlayer === 'white' ? 1 : 0.6
+          backgroundColor: gameState.currentPlayer === 'white' ? 'rgba(0, 15, 20, 0.95)' : 'transparent',
+          borderTop: gameState.currentPlayer === 'white' ? '2px solid rgba(255, 255, 255, 0.2)' : 'none',
+          opacity: gameState.currentPlayer === 'white' ? 1.0 : 0.4,
+          boxShadow: gameState.currentPlayer === 'white' ? '0 0 15px rgba(0, 0, 0, 0.5)' : 'none',
+          transition: 'all 0.3s ease-in-out'
         }}
       >
         <div className="flex items-center gap-3">
@@ -346,8 +385,8 @@ export function GameView({
             {mode === 'ai' ? <User className="w-5 h-5" /> : whiteName.charAt(0)}
           </div>
           <div>
-            <div className="font-bold text-sm" style={{ color: theme.textColor }}>{whiteName}</div>
-            <div className="text-xs opacity-60" style={{ color: theme.textColor }}>
+            <div className="font-bold text-sm text-white">{whiteName}</div>
+            <div className="text-xs opacity-60 text-white">
               {TOTAL_PIECES - gameState.whitePiecesPlaced} to place, {gameState.whitePiecesOnBoard} on board
             </div>
           </div>
@@ -364,8 +403,22 @@ export function GameView({
       >
         <Button
           onClick={handleNewGame}
-          className="flex-1 flex items-center justify-center gap-2 h-10 font-bold text-sm rounded-lg transition-all"
-          style={{ backgroundColor: theme.accentColor, color: '#fff' }}
+          className="flex-1 flex items-center justify-center gap-2 h-10 font-bold text-sm rounded-lg transition-all active:scale-95 shadow-lg"
+          style={{
+            backgroundColor: '#FFD700',
+            color: '#000',
+            opacity: 0.95,
+            fontWeight: 'bold',
+            transition: 'all 0.2s ease-in-out'
+          }}
+          onMouseEnter={(e) => {
+            e.currentTarget.style.opacity = '0.8';
+            e.currentTarget.style.transform = 'scale(1.02)';
+          }}
+          onMouseLeave={(e) => {
+            e.currentTarget.style.opacity = '0.95';
+            e.currentTarget.style.transform = 'scale(1.0)';
+          }}
         >
           <Sparkles className="w-4 h-4" />
           <span className="hidden sm:inline">New Game</span>

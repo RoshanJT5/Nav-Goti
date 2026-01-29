@@ -39,6 +39,11 @@ export interface Theme {
   };
   scoreboardGradient?: string;
   chatGradient?: string;
+  bgImage?: string;
+  bgImageOpacity?: number;
+  boardImage?: string;
+  whitePlayerName?: string;
+  blackPlayerName?: string;
 }
 
 export const THEMES: Theme[] = [
@@ -239,6 +244,51 @@ export const THEMES: Theme[] = [
     },
     scoreboardGradient: 'linear-gradient(135deg, #22c55e, #3b82f6, #ef4444)',
     chatGradient: 'linear-gradient(135deg, #22c55e, #3b82f6, #ef4444)',
+  },
+  {
+    id: 'peacock',
+    name: 'Peacock Palace',
+    boardBg: 'linear-gradient(135deg, rgba(0, 25, 20, 0.95), rgba(0, 10, 10, 0.98))',
+    boardBorder: '#B8860B',
+    boardLineColor: '#FFD700',
+    lineColor: '#FFD700',
+    lineWidth: 3,
+    pointColor: '#DAA520',
+    pointHoverColor: '#FFF7CC',
+    nodeInnerColor: 'rgba(218, 165, 32, 0.3)',
+    titleColor: '#FFD700',
+    headingColor: '#FFD700',
+    textColor: '#ccfbf1',
+    whitePlayerName: 'Emerald Army',
+    blackPlayerName: 'Sapphire Army',
+    whitePiece: {
+      bg: 'rgb(22, 194, 33)',
+      border: 'rgba(150, 255, 150, 0.6)',
+      shadow: '0 0 25px rgb(22, 194, 33), inset 0 0 15px rgba(255, 255, 255, 0.5)',
+      content: '✨',
+      color: '#FFFFFF',
+    },
+    blackPiece: {
+      bg: 'rgba(4, 160, 239, 0.7)',
+      border: 'rgba(150, 220, 255, 0.6)',
+      shadow: '0 0 25px rgba(4, 160, 239, 0.9), inset 0 0 15px rgba(255, 255, 255, 0.5)',
+      content: '💎',
+      color: '#FFFFFF',
+    },
+    appBackground: 'linear-gradient(135deg, #012a23 0%, #001524 100%)',
+    headerBg: 'rgba(0, 15, 20, 0.95)',
+    cardBg: 'rgba(0, 15, 20, 0.95)',
+    accentColor: '#ffd700',
+    mutedColor: '#00ffcc',
+    isDark: true,
+    gameModes: {
+      ai: { color: '#00ffcc', bg: 'rgba(0, 255, 204, 0.1)' },
+      local: { color: '#ffd700', bg: 'rgba(255, 215, 0, 0.1)' },
+      online: { color: '#ec4899', bg: 'rgba(236, 72, 153, 0.1)' },
+    },
+    bgImage: '/peacock-bg.jpg',
+    bgImageOpacity: 0.45,
+    boardImage: '/peacock-bg.jpg',
   }
 ];
 

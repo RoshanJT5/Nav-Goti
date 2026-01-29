@@ -268,93 +268,137 @@ export function MatchmakingView({ onMatch, onCancel, profile }: MatchmakingViewP
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center p-4 transition-colors duration-500" style={{ backgroundColor: theme.appBackground }}>
-      <motion.div
-        initial={{ opacity: 0, scale: 0.95 }}
-        animate={{ opacity: 1, scale: 1 }}
-        className="rounded-xl p-8 text-center max-w-md w-full border-2 shadow-2xl"
-        style={{ backgroundColor: theme.cardBg, borderColor: theme.lineColor + '20' }}
-      >
-        {status === 'searching' && (
-          <>
-            <div className="relative w-24 h-24 mx-auto mb-6">
-              <motion.div
-                className="absolute inset-0 rounded-full opacity-20"
-                style={{ backgroundColor: theme.accentColor }}
-                animate={{ scale: [1, 1.5, 1], opacity: [0.2, 0, 0.2] }}
-                transition={{ duration: 2, repeat: Infinity }}
-              />
-              <motion.div
-                className="absolute inset-0 rounded-full opacity-20"
-                style={{ backgroundColor: theme.accentColor }}
-                animate={{ scale: [1, 1.5, 1], opacity: [0.2, 0, 0.2] }}
-                transition={{ duration: 2, repeat: Infinity, delay: 0.5 }}
-              />
-              <div className="absolute inset-0 flex items-center justify-center">
-                <div className="w-16 h-16 rounded-full flex items-center justify-center shadow-lg" style={{ backgroundColor: theme.accentColor }}>
-                  <Users className="w-8 h-8 text-white" />
+    <div
+      className="min-h-screen relative transition-all duration-500 overflow-hidden"
+      style={{
+        background: theme.id === 'peacock' ? 'transparent' : theme.appBackground,
+        backgroundAttachment: 'fixed',
+      }}
+    >
+      {/* Background Atmosphere Layer */}
+      <div className={theme.id === 'peacock' ? 'peacock-atmosphere' : ''} />
+
+      {/* Background Texture Layer */}
+      {theme.bgImage && (
+        <div
+          className={`absolute inset-0 pointer-events-none z-0 ${theme.id === 'peacock' ? 'peacock-feather-pattern' : ''}`}
+          style={{
+            backgroundImage: `url(${theme.bgImage})`,
+            backgroundSize: 'cover',
+            backgroundPosition: 'center',
+            backgroundAttachment: 'fixed',
+            opacity: theme.bgImageOpacity ?? 1,
+          }}
+        />
+      )}
+
+      <div className="relative z-10 min-h-screen flex items-center justify-center p-4">
+        <motion.div
+          initial={{ opacity: 0, scale: 0.95 }}
+          animate={{ opacity: 1, scale: 1 }}
+          className="rounded-xl p-8 text-center max-w-md w-full border backdrop-blur-xl shadow-2xl"
+          style={{
+            backgroundColor: theme.cardBg,
+            borderColor: theme.id === 'peacock' ? 'rgba(255, 215, 0, 0.5)' : theme.boardLineColor + '20',
+            boxShadow: theme.id === 'peacock' ? '0 8px 32px 0 rgba(0, 0, 0, 0.6)' : 'none'
+          }}
+        >
+          {status === 'searching' && (
+            <>
+              <div className="relative w-24 h-24 mx-auto mb-6">
+                <motion.div
+                  className="absolute inset-0 rounded-full opacity-20"
+                  style={{ backgroundColor: theme.accentColor }}
+                  animate={{ scale: [1, 1.5, 1], opacity: [0.2, 0, 0.2] }}
+                  transition={{ duration: 2, repeat: Infinity }}
+                />
+                <motion.div
+                  className="absolute inset-0 rounded-full opacity-20"
+                  style={{ backgroundColor: theme.accentColor }}
+                  animate={{ scale: [1, 1.5, 1], opacity: [0.2, 0, 0.2] }}
+                  transition={{ duration: 2, repeat: Infinity, delay: 0.5 }}
+                />
+                <div className="absolute inset-0 flex items-center justify-center">
+                  <div
+                    className="w-16 h-16 rounded-full flex items-center justify-center shadow-lg"
+                    style={{
+                      backgroundColor: theme.accentColor,
+                      filter: theme.id === 'peacock' ? 'drop-shadow(0 0 10px rgba(255, 215, 0, 0.6))' : 'none'
+                    }}
+                  >
+                    <Users className="w-8 h-8 text-white" />
+                  </div>
                 </div>
               </div>
-            </div>
 
-            <h2 className="text-2xl font-bold mb-2" style={{ color: theme.isDark ? '#fff' : theme.headingColor }}>Finding Opponent</h2>
-            <p className="mb-4" style={{ color: theme.isDark ? 'rgba(255,255,255,0.7)' : theme.textColor }}>Searching for a player to match with...</p>
+              <h2 className="text-2xl font-bold mb-2" style={{ color: theme.headingColor }}>Finding Opponent</h2>
+              <p className="mb-4" style={{ color: theme.textColor }}>Searching for a player to match with...</p>
 
-            <div className="rounded-lg px-4 py-3 mb-6 shadow-inner" style={{ backgroundColor: theme.appBackground }}>
-              <div className="flex items-center justify-center gap-2" style={{ color: theme.isDark ? '#fff' : theme.textColor }}>
-                <Loader2 className="w-5 h-5 animate-spin" style={{ color: theme.accentColor }} />
-                <span className="font-mono text-lg">{formatTime(searchTime)}</span>
+              <div className="rounded-lg px-4 py-4 mb-6 shadow-inner border" style={{ backgroundColor: theme.appBackground, borderColor: theme.boardLineColor + '10' }}>
+                <div className="flex items-center justify-center gap-3 text-white">
+                  <Loader2 className="w-6 h-6 animate-spin" style={{ color: theme.id === 'peacock' ? '#00ffcc' : theme.accentColor }} />
+                  <span className="font-mono text-xl tracking-widest">{formatTime(searchTime)}</span>
+                </div>
               </div>
-            </div>
 
-            <Button
-              onClick={handleCancel}
-              variant="outline"
-              className="transition-all"
-              style={{ borderColor: theme.isDark ? 'rgba(255,255,255,0.2)' : theme.lineColor + '20', color: theme.isDark ? '#fff' : theme.lineColor }}
-            >
-              <X className="w-4 h-4 mr-2" />
-              Cancel
-            </Button>
-          </>
-        )}
+              <Button
+                onClick={handleCancel}
+                variant="outline"
+                className="transition-all hover:scale-105"
+                style={{
+                  borderColor: theme.id === 'peacock' ? 'rgba(255, 215, 0, 0.3)' : 'rgba(255,255,255,0.2)',
+                  color: theme.textColor
+                }}
+              >
+                <X className="w-4 h-4 mr-2" />
+                Cancel Search
+              </Button>
+            </>
+          )}
 
-        {status === 'found' && (
-          <>
-            <motion.div
-              initial={{ scale: 0 }}
-              animate={{ scale: 1 }}
-              className="w-20 h-20 rounded-full flex items-center justify-center mx-auto mb-6 shadow-lg"
-              style={{ backgroundColor: theme.accentColor }}
-            >
-              <Zap className="w-10 h-10 text-white" />
-            </motion.div>
+          {status === 'found' && (
+            <>
+              <motion.div
+                initial={{ scale: 0 }}
+                animate={{ scale: 1 }}
+                className="w-20 h-20 rounded-full flex items-center justify-center mx-auto mb-6 shadow-lg"
+                style={{
+                  backgroundColor: theme.accentColor,
+                  filter: theme.id === 'peacock' ? 'drop-shadow(0 0 15px rgba(255, 215, 0, 0.6))' : 'none'
+                }}
+              >
+                <Zap className="w-10 h-10 text-white" />
+              </motion.div>
 
-            <h2 className="text-2xl font-bold mb-2" style={{ color: theme.isDark ? '#fff' : theme.headingColor }}>Match Found!</h2>
-            <p style={{ color: theme.isDark ? 'rgba(255,255,255,0.7)' : theme.textColor }}>Starting game...</p>
-          </>
-        )}
+              <h2 className="text-2xl font-bold mb-2" style={{ color: theme.headingColor }}>Match Found!</h2>
+              <p style={{ color: theme.textColor }}>Initializing high-stakes session...</p>
+            </>
+          )}
 
-        {status === 'error' && (
-          <>
-            <div className="w-20 h-20 bg-red-600 rounded-full flex items-center justify-center mx-auto mb-6 shadow-lg">
-              <X className="w-10 h-10 text-white" />
-            </div>
+          {status === 'error' && (
+            <>
+              <div className="w-20 h-20 bg-red-600 rounded-full flex items-center justify-center mx-auto mb-6 shadow-lg">
+                <X className="w-10 h-10 text-white" />
+              </div>
 
-            <h2 className="text-2xl font-bold mb-2" style={{ color: theme.isDark ? '#fff' : theme.headingColor }}>Connection Error</h2>
-            <p className="mb-4" style={{ color: theme.isDark ? 'rgba(255,255,255,0.7)' : theme.textColor }}>Failed to connect to matchmaking service.</p>
+              <h2 className="text-2xl font-bold mb-2" style={{ color: theme.headingColor }}>Connection Error</h2>
+              <p className="mb-4" style={{ color: theme.textColor }}>Failed to connect to matchmaking service.</p>
 
-            <Button
-              onClick={onCancel}
-              variant="outline"
-              className="transition-all"
-              style={{ borderColor: theme.isDark ? 'rgba(255,255,255,0.2)' : theme.lineColor + '20', color: theme.isDark ? '#fff' : theme.lineColor }}
-            >
-              Back to Menu
-            </Button>
-          </>
-        )}
-      </motion.div>
+              <Button
+                onClick={onCancel}
+                variant="outline"
+                className="transition-all"
+                style={{
+                  borderColor: 'rgba(255,255,255,0.2)',
+                  color: theme.textColor
+                }}
+              >
+                Back to Menu
+              </Button>
+            </>
+          )}
+        </motion.div>
+      </div>
     </div>
   );
 }
