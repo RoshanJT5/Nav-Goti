@@ -610,10 +610,10 @@ export function OnlineGameView({ roomId, onBack, profile }: OnlineGameViewProps)
             </motion.div>
           </div>
         ) : (
-          <div className="flex-1 flex flex-col lg:flex-row w-full h-full overflow-hidden">
+          <div className="flex-1 flex flex-col lg:flex-row w-full h-full overflow-hidden items-center justify-center lg:items-stretch lg:justify-start">
             {/* Main Board Area */}
-            <div className="flex-1 flex flex-col w-full h-full relative">
-              <div className="px-4 py-3 flex items-center justify-between shrink-0 border-b z-10 transition-all duration-300"
+            <div className="flex-1 flex flex-col w-full h-full relative overflow-hidden items-center">
+              <div className="w-full px-4 py-3 flex items-center justify-between shrink-0 border-b z-10 transition-all duration-300"
                 style={{
                   backgroundColor: gameState.currentPlayer !== playerColor ? 'rgba(0, 15, 20, 0.95)' : 'transparent',
                   borderBottom: `2px solid ${gameState.currentPlayer !== playerColor ? 'rgba(255, 255, 255, 0.2)' : 'transparent'}`,
@@ -732,7 +732,7 @@ export function OnlineGameView({ roomId, onBack, profile }: OnlineGameViewProps)
               </div>
 
               {/* Bottom Player Bar */}
-              <div className="px-4 py-3 flex items-center justify-between shrink-0 border-t z-10 transition-all duration-300"
+              <div className="w-full px-4 py-3 flex items-center justify-between shrink-0 border-t z-10 transition-all duration-300"
                 style={{
                   backgroundColor: gameState.currentPlayer === playerColor ? 'rgba(0, 15, 20, 0.95)' : 'transparent',
                   borderTop: `2px solid ${gameState.currentPlayer === playerColor ? 'rgba(255, 255, 255, 0.2)' : 'transparent'}`,
@@ -926,8 +926,8 @@ export function OnlineGameView({ roomId, onBack, profile }: OnlineGameViewProps)
               )}
             </div>
 
-            {/* Desktop Sidebar */}
-            <div className="hidden lg:flex w-96 flex-col border-l z-20" style={{ backgroundColor: theme.cardBg, borderColor: theme.boardLineColor + '20' }}>
+            {/* Desktop Sidebar (Rendered conditionally for clean DOM on mobile) */}
+            <div className="hidden lg:flex w-96 flex-col border-l z-20 shrink-0" style={{ backgroundColor: theme.cardBg, borderColor: theme.boardLineColor + '20' }}>
               <div className="p-4 border-b flex items-center justify-between" style={{ backgroundColor: theme.headerBg, borderColor: theme.lineColor + '20' }}>
                 <div className="flex items-center gap-2">
                   <Users className="w-5 h-5" style={{ color: theme.accentColor }} />
