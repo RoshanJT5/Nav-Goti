@@ -195,7 +195,8 @@ export default function Home() {
       <div
         className="min-h-screen transition-all duration-500 relative"
         style={{
-          background: theme.appBackground,
+          backgroundColor: theme.appBackground?.includes('gradient') ? 'transparent' : theme.appBackground,
+          backgroundImage: theme.appBackground?.includes('gradient') ? theme.appBackground : 'none',
           backgroundAttachment: 'fixed',
         }}
       >
@@ -352,7 +353,10 @@ export default function Home() {
     <div
       className="min-h-screen transition-all duration-500 relative overflow-x-hidden"
       style={{
-        background: theme.id === 'peacock' ? 'linear-gradient(135deg, #0a9d81 0%, #0066b3 100%)' : theme.appBackground,
+        backgroundColor: theme.id === 'peacock' ? 'transparent' : (theme.appBackground?.includes('gradient') ? 'transparent' : theme.appBackground),
+        backgroundImage: theme.id === 'peacock'
+          ? 'linear-gradient(135deg, #0a9d81 0%, #0066b3 100%)'
+          : (theme.appBackground?.includes('gradient') ? theme.appBackground : 'none'),
         backgroundAttachment: 'fixed',
       }}
     >
@@ -393,22 +397,20 @@ export default function Home() {
               >
                 <span className="text-white font-bold text-xl">N</span>
               </div>
-              <span className="text-2xl font-bold" style={{ color: theme.titleColor }}>Nav Goti</span>
+              <span className={`text-2xl font-bold ${theme.id === 'modern' ? 'text-gray-900' : 'text-white'}`}>Nav Goti</span>
             </div>
 
             <div className="flex items-center gap-4">
               <nav className="hidden md:flex items-center gap-6 mr-4">
                 <button
                   onClick={() => startGame('ai')}
-                  className="hover:opacity-80 transition-opacity text-sm font-medium"
-                  style={{ color: theme.textColor }}
+                  className={`hover:opacity-80 transition-opacity text-sm font-medium ${theme.id === 'modern' ? 'text-gray-900' : 'text-white'}`}
                 >
                   Play
                 </button>
                 <button
                   onClick={() => setScreen('rules')}
-                  className="hover:opacity-80 transition-opacity text-sm font-medium"
-                  style={{ color: theme.textColor }}
+                  className={`hover:opacity-80 transition-opacity text-sm font-medium ${theme.id === 'modern' ? 'text-gray-900' : 'text-white'}`}
                 >
                   Learn
                 </button>
@@ -458,7 +460,7 @@ export default function Home() {
             <h1 className="text-5xl md:text-6xl font-bold mb-4" style={{ color: theme.id === 'classic' ? '#629924' : theme.titleColor }}>
               Nav Goti
             </h1>
-            <p className="text-xl max-w-2xl mx-auto opacity-80" style={{ color: theme.textColor }}>
+            <p className={`text-xl max-w-2xl mx-auto opacity-80 ${theme.id === 'modern' ? 'text-gray-800' : 'text-white'}`}>
               The ancient strategy game from Sindhu, India. Form mills, capture pieces, and
               outsmart your opponent.
             </p>
@@ -488,10 +490,10 @@ export default function Home() {
                 >
                   <Bot className="w-7 h-7 text-white" />
                 </div>
-                <h3 className="text-xl font-bold mb-2" style={{ color: theme.id === 'peacock' ? '#ffffff' : theme.headingColor }}>
+                <h3 className={`text-xl font-bold mb-2 ${theme.id === 'modern' ? 'text-gray-900' : 'text-white'}`}>
                   Play vs Computer
                 </h3>
-                <p className="text-sm" style={{ color: theme.id === 'peacock' ? '#ffffff' : theme.textColor }}>
+                <p className={`text-sm opacity-100 ${theme.id === 'modern' ? 'text-gray-700' : 'text-white'}`}>
                   Challenge our AI at Easy, Medium, or Hard difficulty
                 </p>
                 <div className="mt-4 flex items-center font-bold" style={{ color: theme.id === 'peacock' ? '#00ffcc' : theme.gameModes.ai.color }}>
@@ -524,10 +526,10 @@ export default function Home() {
                 >
                   <Users className="w-7 h-7 text-white" />
                 </div>
-                <h3 className="text-xl font-bold mb-2" style={{ color: theme.id === 'peacock' ? '#ffffff' : theme.headingColor }}>
+                <h3 className={`text-xl font-bold mb-2 ${theme.id === 'modern' ? 'text-gray-900' : 'text-white'}`}>
                   Local Multiplayer
                 </h3>
-                <p className="text-sm" style={{ color: theme.id === 'peacock' ? '#ffffff' : theme.textColor }}>
+                <p className={`text-sm opacity-100 ${theme.id === 'modern' ? 'text-gray-700' : 'text-white'}`}>
                   Play with a friend on the same device
                 </p>
                 <div className="mt-4 flex items-center font-bold" style={{ color: theme.id === 'peacock' ? '#ffd700' : theme.gameModes.local.color }}>
@@ -560,10 +562,10 @@ export default function Home() {
                 >
                   <Globe className="w-7 h-7 text-white" />
                 </div>
-                <h3 className="text-xl font-bold mb-2" style={{ color: theme.id === 'peacock' ? '#ffffff' : (theme.isDark ? '#ffffff' : '#1f2937') }}>
+                <h3 className={`text-xl font-bold mb-2 ${theme.id === 'modern' ? 'text-gray-900' : 'text-white'}`}>
                   Online Multiplayer
                 </h3>
-                <p className="text-sm" style={{ color: theme.id === 'peacock' ? '#ffffff' : (theme.isDark ? '#e5e7eb' : '#4b5563') }}>
+                <p className={`text-sm opacity-100 ${theme.id === 'modern' ? 'text-gray-700' : 'text-white'}`}>
                   Play with friends or random opponents online
                 </p>
                 <div className="mt-4 flex items-center font-bold" style={{ color: '#ec4899' }}>

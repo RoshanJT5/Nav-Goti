@@ -271,7 +271,8 @@ export function MatchmakingView({ onMatch, onCancel, profile }: MatchmakingViewP
     <div
       className="min-h-screen relative transition-all duration-500 overflow-hidden"
       style={{
-        background: theme.id === 'peacock' ? 'transparent' : theme.appBackground,
+        backgroundColor: theme.id === 'peacock' ? 'transparent' : (theme.appBackground?.includes('gradient') ? 'transparent' : theme.appBackground),
+        backgroundImage: theme.appBackground?.includes('gradient') ? theme.appBackground : 'none',
         backgroundAttachment: 'fixed',
       }}
     >

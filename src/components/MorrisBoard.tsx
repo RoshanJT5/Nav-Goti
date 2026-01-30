@@ -168,13 +168,16 @@ export function MorrisBoard({
       className="w-full h-full flex justify-center items-center"
     >
       <div
-        className={`relative transition-all duration-500 flex justify-center items-center ${isPeacock ? '' : 'rounded-2xl shadow-2xl'}`}
+        className={`relative transition-all duration-500 flex justify-center items-center ${isPeacock ? 'peacock-board-container' : 'rounded-2xl shadow-2xl'}`}
         style={{
-          width: BOARD_SIZE + 60,
-          height: BOARD_SIZE + 60,
+          width: isPeacock ? undefined : BOARD_SIZE + 60,
+          height: isPeacock ? undefined : BOARD_SIZE + 60,
           padding: 0,
-          background: isPeacock
+          backgroundImage: isPeacock
             ? 'linear-gradient(135deg, rgba(0, 25, 20, 0.95), rgba(0, 10, 10, 0.98))'
+            : (theme.id === 'dark' ? 'none' : 'none'),
+          backgroundColor: isPeacock
+            ? 'transparent'
             : (theme.id === 'dark' ? '#000000' : theme.boardBorder),
           boxShadow: isPeacock
             ? 'none'

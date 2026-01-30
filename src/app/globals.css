@@ -203,6 +203,20 @@
   box-shadow: 0 0 15px rgba(255, 215, 0, 0.4), inset 0 0 10px rgba(255, 215, 0, 0.2);
 }
 
+/* Peacock Board Mobile Tightening */
+.peacock-board-container {
+  width: 440px;
+  height: 440px;
+}
+
+@media (max-width: 768px) {
+  .peacock-board-container {
+    width: 390px !important; /* BOARD_SIZE(380) + 10px tight margin */
+    height: 390px !important;
+    padding: 0 !important;
+  }
+}
+
 /* Custom animation for chat button */
 @keyframes bounce-slow {
   0%, 100% {

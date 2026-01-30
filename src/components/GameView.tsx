@@ -229,7 +229,8 @@ export function GameView({
     <div
       className="h-screen flex flex-col overflow-hidden transition-all duration-500 relative"
       style={{
-        background: theme.id === 'peacock' ? 'transparent' : theme.appBackground,
+        backgroundColor: theme.id === 'peacock' ? 'transparent' : (theme.appBackground?.includes('gradient') ? 'transparent' : theme.appBackground),
+        backgroundImage: theme.appBackground?.includes('gradient') ? theme.appBackground : 'none',
         backgroundAttachment: 'fixed',
       }}
     >
@@ -281,25 +282,32 @@ export function GameView({
 
       {/* Top Player Bar (Opponent/Black) */}
       <div
-        className="px-4 py-3 border-b flex items-center justify-between flex-shrink-0"
+        className="px-4 py-3 border-b flex items-center justify-between flex-shrink-0 transition-all duration-500"
         style={{
-          backgroundColor: gameState.currentPlayer === 'black' ? 'rgba(0, 15, 20, 0.95)' : 'transparent',
-          borderBottom: gameState.currentPlayer === 'black' ? '2px solid rgba(255, 255, 255, 0.2)' : 'none',
-          opacity: gameState.currentPlayer === 'black' ? 1.0 : 0.4,
-          boxShadow: gameState.currentPlayer === 'black' ? '0 0 15px rgba(0, 0, 0, 0.5)' : 'none',
-          transition: 'all 0.3s ease-in-out'
+          backgroundColor: gameState.currentPlayer === 'black'
+            ? (theme.id === 'peacock' ? 'rgba(0, 40, 50, 0.95)' : 'rgba(255, 255, 255, 0.08)')
+            : (theme.id === 'peacock' ? 'rgba(0, 40, 50, 0)' : 'rgba(255, 255, 255, 0)'),
+          borderBottom: gameState.currentPlayer === 'black' ? `3px solid ${theme.accentColor}` : '3px solid transparent',
+          opacity: 1, // Keep opacity 1 and use inner content dimming to prevent flickering
+          boxShadow: gameState.currentPlayer === 'black' ? (theme.id === 'peacock' ? '0 4px 25px rgba(0, 255, 204, 0.25)' : '0 4px 15px rgba(0, 0, 0, 0.4)') : 'none',
         }}
       >
-        <div className="flex items-center gap-3">
+        <div className={`flex items-center gap-3 transition-opacity duration-300 ${gameState.currentPlayer === 'black' ? 'opacity-100' : 'opacity-35'}`}>
           <div
-            className="w-10 h-10 rounded-full flex items-center justify-center font-bold text-white shadow-lg"
-            style={{ backgroundColor: '#1f2937', border: '2px solid #374151' }}
+            className={`w-10 h-10 rounded-full flex items-center justify-center font-bold text-white shadow-lg transition-transform duration-300 ${gameState.currentPlayer === 'black' ? 'scale-110 ring-2 ring-offset-2 ring-offset-black' : 'scale-100 opacity-60'}`}
+            style={{
+              backgroundColor: '#1f2937',
+              border: gameState.currentPlayer === 'black' ? `2px solid ${theme.accentColor}` : '2px solid #374151',
+              boxShadow: gameState.currentPlayer === 'black' ? `0 0 15px ${theme.accentColor}40` : 'none'
+            }}
           >
             {mode === 'ai' ? <Cpu className="w-5 h-5" /> : blackName.charAt(0)}
           </div>
           <div>
-            <div className="font-bold text-sm text-white">{blackName}</div>
-            <div className="text-xs opacity-60 text-white">
+            <div className="font-bold text-sm transition-colors duration-300" style={{ color: gameState.currentPlayer === 'black' ? theme.accentColor : '#ffffff' }}>
+              {blackName}
+            </div>
+            <div className="text-xs text-white opacity-70">
               {TOTAL_PIECES - gameState.blackPiecesPlaced} to place, {gameState.blackPiecesOnBoard} on board
             </div>
           </div>
@@ -312,8 +320,86 @@ export function GameView({
         )}
       </div>
 
-      {/* Game Board - Centered and Responsive */}
-      <div className="flex-1 flex flex-col items-center justify-center p-2 overflow-hidden">
+      {/* Game BoardArea - Centered and Responsive */}
+      <div className={`flex-1 flex items-center justify-center p-2 overflow-hidden relative ${mode === 'local' ? (gameState.currentPlayer === 'white' ? 'flex-col-reverse' : 'flex-col') : 'flex-col'} sm:flex-col`}>
+        {/* Status Message - Responsive HUD (Pill on Mobile, Square on Web) */}
+        <div className={`sm:absolute sm:right-8 lg:right-24 sm:top-[45%] sm:-translate-y-1/2 z-50 ${gameState.currentPlayer === 'white' ? 'mt-2' : 'mb-2'} sm:mt-0 sm:mb-0 transition-all duration-500`}>
+          <AnimatePresence mode="wait">
+            <motion.div
+              key={getStatusMessage()}
+              initial={{ opacity: 0, scale: 0.9 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0, scale: 0.9 }}
+              className={`
+                flex items-center justify-center gap-2 font-bold transition-all duration-500 text-center box-border
+                /* Mobile: Compact Pill */
+                px-4 py-1.5 rounded-full shadow-lg border-2
+                /* Desktop: Square HUD */
+                sm:w-28 sm:h-28 lg:w-32 lg:h-32 sm:rounded-2xl sm:flex-col sm:backdrop-blur-md sm:px-2 sm:shadow-2xl sm:gap-1 lg:gap-2
+              `}
+              style={{
+                backgroundColor: theme.id === 'peacock'
+                  ? (gameState.currentPlayer === 'white' ? 'rgba(0, 255, 127, 0.15)' : 'rgba(0, 255, 255, 0.15)')
+                  : (gameState.phase === 'gameOver' || gameState.mustRemove ? '#ef4444ee' : theme.accentColor + 'dd'),
+                borderColor: theme.id === 'peacock'
+                  ? (gameState.currentPlayer === 'white' ? '#00FF7F' : '#00FFFF')
+                  : (gameState.phase === 'gameOver' || gameState.mustRemove ? '#dc2626' : theme.mutedColor),
+                color: theme.id === 'peacock'
+                  ? (gameState.currentPlayer === 'white' ? '#00FF7F' : '#00FFFF')
+                  : '#fff',
+                boxShadow: theme.id === 'peacock'
+                  ? `0 0 30px ${gameState.currentPlayer === 'white' ? 'rgba(0, 255, 127, 0.3)' : 'rgba(0, 255, 255, 0.3)'}`
+                  : '0 10px 25px -5px rgba(0, 0, 0, 0.4)'
+              }}
+            >
+              {/* Icon - Smaller on mobile pill */}
+              <div className="sm:scale-110 lg:scale-125 mb-0 sm:mb-1">
+                {getStatusIcon()}
+              </div>
+
+              {/* Mobile View: Simple Text */}
+              <span className="text-xs sm:hidden">
+                {gameState.phase === 'gameOver'
+                  ? `${gameState.winner === 'white' ? whiteName : blackName} wins!`
+                  : (gameState.mustRemove
+                    ? 'Remove piece!'
+                    : gameState.phase === 'placing'
+                      ? 'Place piece'
+                      : 'Move piece'
+                  )
+                }
+              </span>
+
+              {/* Desktop View: Stacked Text Labels */}
+              <div className="hidden sm:flex flex-col items-center">
+                <span className="text-[9px] lg:text-[10px] leading-tight uppercase tracking-wider opacity-90">
+                  {gameState.phase === 'gameOver'
+                    ? 'Winner'
+                    : (gameState.mustRemove
+                      ? 'Action'
+                      : (gameState.phase === 'placing' ? 'Place a' : 'Move a')
+                    )
+                  }
+                </span>
+                <span className="text-[10px] lg:text-xs font-black leading-tight uppercase">
+                  {gameState.phase === 'gameOver'
+                    ? (gameState.winner === 'white' ? whiteName : blackName)
+                    : (gameState.mustRemove
+                      ? 'REMOVE PIECE'
+                      : 'PIECE'
+                    )
+                  }
+                </span>
+                {!gameState.mustRemove && gameState.phase !== 'gameOver' && (
+                  <span className="text-[9px] lg:text-[10px] mt-1 font-medium opacity-80">
+                    {gameState.currentPlayer === 'white' ? whiteName : blackName}
+                  </span>
+                )}
+              </div>
+            </motion.div>
+          </AnimatePresence>
+        </div>
+
         <div className="w-full max-w-[min(100vw-2rem,500px)] aspect-square flex items-center justify-center">
           <MorrisBoard
             gameState={gameState}
@@ -322,71 +408,35 @@ export function GameView({
             themeId={profile?.theme_id}
           />
         </div>
-
-        {/* Status Message - Compact */}
-        <AnimatePresence mode="wait">
-          <motion.div
-            key={getStatusMessage()}
-            initial={{ opacity: 0, y: 10 }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: -10 }}
-            transition={{ duration: 0.2 }}
-            className={`px-4 py-1.5 rounded-full flex items-center gap-2 font-bold shadow-lg border-2 z-10 transition-colors duration-500`}
-            style={{
-              backgroundColor: theme.id === 'peacock'
-                ? (gameState.currentPlayer === 'white' ? 'rgba(0, 255, 127, 0.2)' : 'rgba(0, 0, 255, 0.2)')
-                : (gameState.phase === 'gameOver' || gameState.mustRemove ? '#ef4444' : theme.accentColor),
-              borderColor: theme.id === 'peacock'
-                ? (gameState.currentPlayer === 'white' ? '#00FF7F' : '#00FFFF')
-                : (gameState.phase === 'gameOver' || gameState.mustRemove ? '#dc2626' : theme.mutedColor),
-              color: theme.id === 'peacock'
-                ? (gameState.currentPlayer === 'white' ? '#00FF7F' : '#00FFFF')
-                : '#fff',
-              boxShadow: theme.id === 'peacock'
-                ? `0 0 15px ${gameState.currentPlayer === 'white' ? 'rgba(0, 255, 127, 0.4)' : 'rgba(0, 255, 255, 0.4)'}`
-                : 'none'
-            }}
-          >
-            {getStatusIcon()}
-            <span className="text-xs sm:text-sm">
-              {gameState.phase === 'gameOver'
-                ? `${gameState.winner === 'white' ? whiteName : blackName} wins!`
-                : (theme.id === 'peacock'
-                  ? `${gameState.currentPlayer === 'white' ? whiteName.toUpperCase() : blackName.toUpperCase()}'S TURN`
-                  : (gameState.mustRemove
-                    ? 'Remove piece!'
-                    : gameState.phase === 'placing'
-                      ? 'Place piece'
-                      : 'Move piece'
-                  )
-                )
-              }
-            </span>
-          </motion.div>
-        </AnimatePresence>
       </div>
 
       {/* Bottom Player Bar (You/White) */}
       <div
-        className="px-4 py-3 border-t flex items-center justify-between flex-shrink-0"
+        className="px-4 py-3 border-t flex items-center justify-between flex-shrink-0 transition-all duration-300"
         style={{
-          backgroundColor: gameState.currentPlayer === 'white' ? 'rgba(0, 15, 20, 0.95)' : 'transparent',
-          borderTop: gameState.currentPlayer === 'white' ? '2px solid rgba(255, 255, 255, 0.2)' : 'none',
-          opacity: gameState.currentPlayer === 'white' ? 1.0 : 0.4,
-          boxShadow: gameState.currentPlayer === 'white' ? '0 0 15px rgba(0, 0, 0, 0.5)' : 'none',
-          transition: 'all 0.3s ease-in-out'
+          backgroundColor: gameState.currentPlayer === 'white' ? (theme.id === 'peacock' ? 'rgba(0, 30, 40, 0.95)' : 'rgba(255, 255, 255, 0.05)') : 'transparent',
+          borderTop: gameState.currentPlayer === 'white' ? `3px solid ${theme.accentColor}` : '3px solid transparent',
+          opacity: 1,
+          boxShadow: gameState.currentPlayer === 'white' ? (theme.id === 'peacock' ? '0 -4px 25px rgba(0, 255, 204, 0.25)' : '0 -4px 15px rgba(0, 0, 0, 0.4)') : 'none',
         }}
       >
-        <div className="flex items-center gap-3">
+        <div className={`flex items-center gap-3 transition-opacity duration-300 ${gameState.currentPlayer === 'white' ? 'opacity-100' : 'opacity-35'}`}>
           <div
-            className="w-10 h-10 rounded-full flex items-center justify-center font-bold shadow-lg"
-            style={{ backgroundColor: '#f3f4f6', color: '#1f2937', border: '2px solid #e5e7eb' }}
+            className={`w-10 h-10 rounded-full flex items-center justify-center font-bold shadow-lg transition-transform duration-300 ${gameState.currentPlayer === 'white' ? 'scale-110 ring-2 ring-offset-2 ring-offset-black' : 'scale-100 opacity-60'}`}
+            style={{
+              backgroundColor: '#f3f4f6',
+              color: '#1f2937',
+              border: gameState.currentPlayer === 'white' ? `2px solid ${theme.accentColor}` : '2px solid #e5e7eb',
+              boxShadow: gameState.currentPlayer === 'white' ? `0 0 15px ${theme.accentColor}40` : 'none'
+            }}
           >
             {mode === 'ai' ? <User className="w-5 h-5" /> : whiteName.charAt(0)}
           </div>
           <div>
-            <div className="font-bold text-sm text-white">{whiteName}</div>
-            <div className="text-xs opacity-60 text-white">
+            <div className="font-bold text-sm transition-colors duration-300" style={{ color: gameState.currentPlayer === 'white' ? theme.accentColor : '#ffffff' }}>
+              {whiteName}
+            </div>
+            <div className="text-xs text-white opacity-70">
               {TOTAL_PIECES - gameState.whitePiecesPlaced} to place, {gameState.whitePiecesOnBoard} on board
             </div>
           </div>

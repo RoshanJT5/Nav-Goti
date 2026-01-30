@@ -214,8 +214,8 @@ export const THEMES: Theme[] = [
     pointColor: '#1e293b',
     pointHoverColor: '#334155',
     nodeInnerColor: 'rgba(34, 197, 94, 0.25)',
-    titleColor: '#22c55e',
-    headingColor: '#22c55e',
+    titleColor: '#ffffff',
+    headingColor: '#ffffff',
     textColor: '#22c55e',
     whitePiece: {
       bg: 'linear-gradient(135deg, #22c55e, #166534)',
