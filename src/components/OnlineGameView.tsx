@@ -500,7 +500,7 @@ export function OnlineGameView({ roomId, onBack, profile }: OnlineGameViewProps)
 
   return (
     <div
-      className="h-[100dvh] flex flex-col overflow-hidden transition-all duration-500 relative"
+      className="h-dvh flex flex-col overflow-hidden transition-all duration-500 relative"
       style={{
         backgroundColor: theme.id === 'peacock' ? 'transparent' : (theme.appBackground?.includes('gradient') ? 'transparent' : theme.appBackground),
         backgroundImage: theme.appBackground?.includes('gradient') ? theme.appBackground : 'none',
@@ -610,7 +610,7 @@ export function OnlineGameView({ roomId, onBack, profile }: OnlineGameViewProps)
             </motion.div>
           </div>
         ) : (
-          <div className="flex-1 flex lg:flex-row h-full overflow-hidden">
+          <div className="flex-1 flex lg:flex-row overflow-hidden">
             {/* Main Board Area */}
             <div className="flex-1 flex flex-col h-full relative">
               <div className="px-4 py-3 flex items-center justify-between shrink-0 border-b z-10 transition-all duration-300"

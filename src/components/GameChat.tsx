@@ -42,12 +42,13 @@ export function GameChat({
   const [newMessage, setNewMessage] = useState("");
   const [unreadCount, setUnreadCount] = useState(0);
   const scrollRef = useRef<HTMLDivElement>(null);
+  const messagesEndRef = useRef<HTMLDivElement>(null);
   const theme = getTheme(themeId);
 
   // Auto-scroll to bottom when messages change
   useEffect(() => {
-    if (scrollRef.current) {
-      scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
+    if (messagesEndRef.current) {
+      messagesEndRef.current.scrollIntoView({ behavior: "smooth" });
     }
   }, [messages, isOpen]);
 
@@ -141,7 +142,7 @@ export function GameChat({
     return (
       <div className="flex flex-col h-full w-full bg-transparent">
         {/* Messages Area */}
-        <ScrollArea className="flex-1 px-4 py-4" ref={scrollRef}>
+        <div className="flex-1 overflow-y-auto px-4 py-4" style={{ color: theme.textColor }}>
           <div className="space-y-4">
             {messages.map((msg) => (
               <div
@@ -175,14 +176,15 @@ export function GameChat({
                 <p className="text-base font-medium" style={{ color: theme.textColor }}>No messages yet. Say hello!</p>
               </div>
             )}
+            <div ref={messagesEndRef} />
           </div>
-        </ScrollArea>
+        </div>
 
         {/* Input Area */}
         <form
           onSubmit={handleSendMessage}
           className="p-4 border-t flex gap-3 shrink-0"
-          style={{ borderColor: theme.lineColor + '10' }}
+          style={{ backgroundColor: theme.cardBg, borderColor: theme.lineColor + '10' }}
         >
           <Input
             value={newMessage}
@@ -213,14 +215,14 @@ export function GameChat({
       {/* Backdrop overlay */}
       {isOpen && (
         <div
-          className="fixed inset-0 bg-black/50 z-[60] transition-opacity duration-300"
+          className="fixed inset-0 bg-black/50 z-60 transition-opacity duration-300"
           onClick={onClose}
         />
       )}
 
       {/* Chat Panel - Full Screen Overlay on Mobile for Keyboard Stability */}
       <div
-        className="fixed inset-0 z-[70] transition-transform duration-300 ease-out flex flex-col"
+        className="fixed inset-0 z-70 transition-transform duration-300 ease-out flex flex-col overscroll-contain"
         style={{
           transform: isOpen ? 'translateY(0)' : 'translateY(100%)',
           backgroundColor: theme.cardBg,
@@ -246,7 +248,7 @@ export function GameChat({
         </div>
 
         {/* Messages Area */}
-        <ScrollArea className="flex-1 px-4 py-4" ref={scrollRef}>
+        <div className="flex-1 overflow-y-auto px-4 py-4 overscroll-contain" style={{ color: theme.textColor }}>
           <div className="space-y-4">
             {messages.map((msg) => (
               <div
@@ -276,19 +278,18 @@ export function GameChat({
             ))}
             {messages.length === 0 && (
               <div className="h-full flex flex-col items-center justify-center py-20 opacity-30 text-center px-4">
-                <MessageCircle className="w-16 h-16 mb-4" style={{ color: theme.textColor }}>
-                  {/* Icon content */}
-                </MessageCircle>
+                <MessageCircle className="w-16 h-16 mb-4" style={{ color: theme.textColor }} />
                 <p className="text-base font-medium" style={{ color: theme.textColor }}>No messages yet. Say hello!</p>
               </div>
             )}
+            <div ref={messagesEndRef} />
           </div>
-        </ScrollArea>
+        </div>
 
         {/* Input Area */}
         <form
           onSubmit={handleSendMessage}
-          className="p-4 border-t flex gap-3 shrink-0 relative z-[80]"
+          className="p-4 border-t flex gap-3 shrink-0 relative z-80"
           style={{
             backgroundColor: theme.headerBg,
             borderColor: theme.lineColor + '10',
