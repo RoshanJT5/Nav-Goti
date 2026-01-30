@@ -610,13 +610,13 @@ export function OnlineGameView({ roomId, onBack, profile }: OnlineGameViewProps)
             </motion.div>
           </div>
         ) : (
-          <div className="flex-1 flex lg:flex-row h-full overflow-hidden">
+          <div className="flex-1 flex flex-col lg:flex-row w-full h-full overflow-hidden">
             {/* Main Board Area */}
-            <div className="flex-1 flex flex-col h-full relative">
+            <div className="flex-1 flex flex-col w-full h-full relative">
               <div className="px-4 py-3 flex items-center justify-between shrink-0 border-b z-10 transition-all duration-300"
                 style={{
                   backgroundColor: gameState.currentPlayer !== playerColor ? 'rgba(0, 15, 20, 0.95)' : 'transparent',
-                  borderBottom: gameState.currentPlayer !== playerColor ? '2px solid rgba(255, 255, 255, 0.2)' : 'none',
+                  borderBottom: `2px solid ${gameState.currentPlayer !== playerColor ? 'rgba(255, 255, 255, 0.2)' : 'transparent'}`,
                   opacity: gameState.currentPlayer !== playerColor ? 1.0 : 0.4,
                   boxShadow: gameState.currentPlayer !== playerColor ? '0 0 15px rgba(0, 0, 0, 0.5)' : 'none'
                 }}>
@@ -735,7 +735,7 @@ export function OnlineGameView({ roomId, onBack, profile }: OnlineGameViewProps)
               <div className="px-4 py-3 flex items-center justify-between shrink-0 border-t z-10 transition-all duration-300"
                 style={{
                   backgroundColor: gameState.currentPlayer === playerColor ? 'rgba(0, 15, 20, 0.95)' : 'transparent',
-                  borderTop: gameState.currentPlayer === playerColor ? '2px solid rgba(255, 255, 255, 0.2)' : 'none',
+                  borderTop: `2px solid ${gameState.currentPlayer === playerColor ? 'rgba(255, 255, 255, 0.2)' : 'transparent'}`,
                   opacity: gameState.currentPlayer === playerColor ? 1.0 : 0.4,
                   boxShadow: gameState.currentPlayer === playerColor ? '0 0 15px rgba(0, 0, 0, 0.5)' : 'none'
                 }}>
@@ -922,13 +922,6 @@ export function OnlineGameView({ roomId, onBack, profile }: OnlineGameViewProps)
                     onUnreadChange={setUnreadMessages}
                     variant="drawer"
                   />
-                  {/* This block is likely intended to be inside GameChat or after it, but not within its props */}
-                  {/* {messages.length === 0 && (
-                    <div className="h-full flex flex-col items-center justify-center py-20 opacity-30 text-center px-4">
-                      <MessageCircle className="w-16 h-16 mb-4" style={{ color: theme.textColor }} />
-                      <p className="text-base font-medium" style={{ color: theme.textColor }}>No messages yet. Say hello!</p>
-                    </div>
-                  )} */}
                 </div>
               )}
             </div>
