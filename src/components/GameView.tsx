@@ -321,87 +321,7 @@ export function GameView({
       </div>
 
       {/* Game BoardArea - Centered and Responsive */}
-      <div className="flex-1 flex items-center justify-center p-2 overflow-hidden relative flex-col sm:flex-col">
-        {/* Status Message - Responsive HUD (Pill on Mobile, Square on Web) */}
-        <div className={`
-          absolute left-0 right-0 flex justify-center z-50 transition-all duration-500
-          ${(mode === 'local' && gameState.currentPlayer === 'black') ? 'top-20' : 'bottom-20'}
-          sm:static sm:block sm:w-auto sm:h-auto sm:m-0
-        `}>
-          <div className="sm:absolute sm:right-8 lg:right-24 sm:top-[45%] sm:-translate-y-1/2 w-fit">
-            <motion.div
-              initial={{ opacity: 0, scale: 0.9 }}
-              animate={{ opacity: 1, scale: 1 }}
-              className={`
-                flex items-center justify-center gap-2 font-bold transition-all duration-500 text-center box-border
-                /* Mobile: Compact Pill */
-                px-4 py-1.5 rounded-full shadow-lg border-2
-                /* Desktop: Square HUD */
-                sm:w-28 sm:h-28 lg:w-32 lg:h-32 sm:rounded-2xl sm:flex-col sm:backdrop-blur-md sm:px-2 sm:shadow-2xl sm:gap-1 lg:gap-2
-              `}
-              style={{
-                backgroundColor: theme.id === 'peacock'
-                  ? (gameState.currentPlayer === 'white' ? 'rgba(0, 255, 127, 0.15)' : 'rgba(0, 255, 255, 0.15)')
-                  : (gameState.phase === 'gameOver' || gameState.mustRemove ? '#ef4444ee' : theme.accentColor + 'dd'),
-                borderColor: theme.id === 'peacock'
-                  ? (gameState.currentPlayer === 'white' ? '#00FF7F' : '#00FFFF')
-                  : (gameState.phase === 'gameOver' || gameState.mustRemove ? '#dc2626' : theme.mutedColor),
-                color: theme.id === 'peacock'
-                  ? (gameState.currentPlayer === 'white' ? '#00FF7F' : '#00FFFF')
-                  : '#fff',
-                boxShadow: theme.id === 'peacock'
-                  ? `0 0 30px ${gameState.currentPlayer === 'white' ? 'rgba(0, 255, 127, 0.3)' : 'rgba(0, 255, 255, 0.3)'}`
-                  : '0 10px 25px -5px rgba(0, 0, 0, 0.4)'
-              }}
-            >
-              {/* Icon - Smaller on mobile pill */}
-              <div className="sm:scale-110 lg:scale-125 mb-0 sm:mb-1">
-                {getStatusIcon()}
-              </div>
-
-              {/* Mobile View: Simple Text */}
-              <span className="text-xs sm:hidden">
-                {gameState.phase === 'gameOver'
-                  ? `${gameState.winner === 'white' ? whiteName : blackName} wins!`
-                  : (gameState.mustRemove
-                    ? 'Remove piece!'
-                    : gameState.phase === 'placing'
-                      ? 'Place piece'
-                      : 'Move piece'
-                  )
-                }
-              </span>
-
-              {/* Desktop View: Stacked Text Labels */}
-              <div className="hidden sm:flex flex-col items-center">
-                <span className="text-[9px] lg:text-[10px] leading-tight uppercase tracking-wider opacity-90">
-                  {gameState.phase === 'gameOver'
-                    ? 'Winner'
-                    : (gameState.mustRemove
-                      ? 'Action'
-                      : (gameState.phase === 'placing' ? 'Place a' : 'Move a')
-                    )
-                  }
-                </span>
-                <span className="text-[10px] lg:text-xs font-black leading-tight uppercase">
-                  {gameState.phase === 'gameOver'
-                    ? (gameState.winner === 'white' ? whiteName : blackName)
-                    : (gameState.mustRemove
-                      ? 'REMOVE PIECE'
-                      : 'PIECE'
-                    )
-                  }
-                </span>
-                {!gameState.mustRemove && gameState.phase !== 'gameOver' && (
-                  <span className="text-[9px] lg:text-[10px] mt-1 font-medium opacity-80">
-                    {gameState.currentPlayer === 'white' ? whiteName : blackName}
-                  </span>
-                )}
-              </div>
-            </motion.div>
-          </div>
-        </div>
-
+      <div className={`flex-1 flex items-center justify-center p-2 overflow-y-auto relative sm:flex-col gap-8 pb-8 ${(mode === 'local' && gameState.currentPlayer === 'black') ? 'flex-col-reverse' : 'flex-col'}`}>
         <div className="w-full max-w-[min(100vw-2rem,500px)] aspect-square flex items-center justify-center">
           <MorrisBoard
             gameState={gameState}
@@ -410,6 +330,81 @@ export function GameView({
             themeId={profile?.theme_id}
           />
         </div>
+        {/* Status Message - Responsive HUD (Pill on Mobile, Square on Web) */}
+        <div className="z-50 sm:absolute sm:right-8 lg:right-24 sm:top-[45%] sm:-translate-y-1/2 sm:block sm:w-auto sm:h-auto sm:m-0 w-full flex justify-center">
+          <motion.div
+            initial={{ opacity: 0, scale: 0.9 }}
+            animate={{ opacity: 1, scale: 1 }}
+            className={`
+                flex items-center justify-center gap-2 font-bold transition-all duration-500 text-center box-border
+                /* Mobile: Compact Pill */
+                px-4 py-1.5 rounded-full shadow-lg border-2
+                /* Desktop: Square HUD */
+                sm:w-28 sm:h-28 lg:w-32 lg:h-32 sm:rounded-2xl sm:flex-col sm:backdrop-blur-md sm:px-2 sm:shadow-2xl sm:gap-1 lg:gap-2
+              `}
+            style={{
+              backgroundColor: theme.id === 'peacock'
+                ? (gameState.currentPlayer === 'white' ? 'rgba(0, 255, 127, 0.15)' : 'rgba(0, 255, 255, 0.15)')
+                : (gameState.phase === 'gameOver' || gameState.mustRemove ? '#ef4444ee' : theme.accentColor + 'dd'),
+              borderColor: theme.id === 'peacock'
+                ? (gameState.currentPlayer === 'white' ? '#00FF7F' : '#00FFFF')
+                : (gameState.phase === 'gameOver' || gameState.mustRemove ? '#dc2626' : theme.mutedColor),
+              color: theme.id === 'peacock'
+                ? (gameState.currentPlayer === 'white' ? '#00FF7F' : '#00FFFF')
+                : '#fff',
+              boxShadow: theme.id === 'peacock'
+                ? `0 0 30px ${gameState.currentPlayer === 'white' ? 'rgba(0, 255, 127, 0.3)' : 'rgba(0, 255, 255, 0.3)'}`
+                : '0 10px 25px -5px rgba(0, 0, 0, 0.4)'
+            }}
+          >
+            {/* Icon - Smaller on mobile pill */}
+            <div className="sm:scale-110 lg:scale-125 mb-0 sm:mb-1">
+              {getStatusIcon()}
+            </div>
+
+            {/* Mobile View: Simple Text */}
+            <span className="text-xs sm:hidden">
+              {gameState.phase === 'gameOver'
+                ? `${gameState.winner === 'white' ? whiteName : blackName} wins!`
+                : (gameState.mustRemove
+                  ? 'Remove piece!'
+                  : gameState.phase === 'placing'
+                    ? 'Place piece'
+                    : 'Move piece'
+                )
+              }
+            </span>
+
+            {/* Desktop View: Stacked Text Labels */}
+            <div className="hidden sm:flex flex-col items-center">
+              <span className="text-[9px] lg:text-[10px] leading-tight uppercase tracking-wider opacity-90">
+                {gameState.phase === 'gameOver'
+                  ? 'Winner'
+                  : (gameState.mustRemove
+                    ? 'Action'
+                    : (gameState.phase === 'placing' ? 'Place a' : 'Move a')
+                  )
+                }
+              </span>
+              <span className="text-[10px] lg:text-xs font-black leading-tight uppercase">
+                {gameState.phase === 'gameOver'
+                  ? (gameState.winner === 'white' ? whiteName : blackName)
+                  : (gameState.mustRemove
+                    ? 'REMOVE PIECE'
+                    : 'PIECE'
+                  )
+                }
+              </span>
+              {!gameState.mustRemove && gameState.phase !== 'gameOver' && (
+                <span className="text-[9px] lg:text-[10px] mt-1 font-medium opacity-80">
+                  {gameState.currentPlayer === 'white' ? whiteName : blackName}
+                </span>
+              )}
+            </div>
+          </motion.div>
+        </div>
+
+
       </div>
 
       {/* Bottom Player Bar (You/White) */}
