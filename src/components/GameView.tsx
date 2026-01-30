@@ -352,7 +352,7 @@ export function GameView({
               {gameState.phase === 'gameOver'
                 ? `${gameState.winner === 'white' ? whiteName : blackName} wins!`
                 : (theme.id === 'peacock'
-                  ? `${gameState.currentPlayer === 'white' ? 'EMERALD' : 'SAPPHIRE'}'S TURN`
+                  ? `${gameState.currentPlayer === 'white' ? whiteName.toUpperCase() : blackName.toUpperCase()}'S TURN`
                   : (gameState.mustRemove
                     ? 'Remove piece!'
                     : gameState.phase === 'placing'

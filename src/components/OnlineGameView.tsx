@@ -665,7 +665,7 @@ export function OnlineGameView({ roomId, onBack, profile }: OnlineGameViewProps)
                   }}
                 >
                   {theme.id === 'peacock'
-                    ? `${gameState.currentPlayer === 'white' ? 'EMERALD' : 'SAPPHIRE'}'S TURN`
+                    ? `${gameState.currentPlayer === 'white' ? whiteName.toUpperCase() : blackName.toUpperCase()}'S TURN`
                     : getStatusMessage()
                   }
                 </motion.div>

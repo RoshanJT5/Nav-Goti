@@ -177,13 +177,13 @@ export function MorrisBoard({
             ? 'linear-gradient(135deg, rgba(0, 25, 20, 0.95), rgba(0, 10, 10, 0.98))'
             : (theme.id === 'dark' ? '#000000' : theme.boardBorder),
           boxShadow: isPeacock
-            ? '0 0 20px rgba(255, 215, 0, 0.4)'
+            ? 'none'
             : (theme.id === 'dark'
               ? '0 0 40px rgba(34, 197, 94, 0.2)'
               : `0 20px 50px rgba(0,0,0,0.4), inset 0 2px 4px rgba(255,255,255,0.2)`),
           transform: `scale(${scale})`,
-          border: isPeacock ? '8px solid #B8860B' : (theme.id === 'dark' ? '1px solid rgba(34, 197, 94, 0.1)' : 'none'),
-          borderRadius: isPeacock ? '16px' : '0',
+          border: isPeacock ? 'none' : (theme.id === 'dark' ? '1px solid rgba(34, 197, 94, 0.1)' : 'none'),
+          borderRadius: isPeacock ? '0' : '0',
           position: 'relative'
         }}
       >
