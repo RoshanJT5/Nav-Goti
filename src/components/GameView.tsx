@@ -331,7 +331,7 @@ export function GameView({
           />
         </div>
         {/* Status Message - Responsive HUD (Pill on Mobile, Square on Web) */}
-        <div className="z-50 sm:absolute sm:right-8 lg:right-24 sm:top-[45%] sm:-translate-y-1/2 sm:block sm:w-auto sm:h-auto sm:m-0 w-full flex justify-center">
+        <div className="z-50 hidden sm:flex sm:absolute sm:right-8 lg:right-24 sm:top-[45%] sm:-translate-y-1/2 sm:w-auto sm:h-auto sm:m-0 justify-center">
           <motion.div
             initial={{ opacity: 0, scale: 0.9 }}
             animate={{ opacity: 1, scale: 1 }}
@@ -438,9 +438,20 @@ export function GameView({
             </div>
           </div>
         </div>
-        {gameState.currentPlayer === 'white' && (
-          <div className="w-2 h-2 rounded-full bg-green-500 animate-pulse" />
-        )}
+        <div className="flex items-center gap-3">
+          <div className="sm:hidden font-bold text-xs animate-pulse" style={{ color: theme.accentColor }}>
+            {gameState.phase === 'gameOver'
+              ? (gameState.winner === 'white' ? 'You Win!' : 'You Lose')
+              : (isAIThinking ? 'Thinking...' : (
+                gameState.mustRemove ? 'Remove Piece!' :
+                  (gameState.phase === 'placing' ? 'Place Piece' : 'Move Piece')
+              ))
+            }
+          </div>
+          {gameState.currentPlayer === 'white' && (
+            <div className="w-2 h-2 rounded-full bg-green-500 animate-pulse" />
+          )}
+        </div>
       </div>
 
       {/* Bottom Action Bar */}

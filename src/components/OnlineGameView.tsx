@@ -647,7 +647,7 @@ export function OnlineGameView({ roomId, onBack, profile }: OnlineGameViewProps)
               {/* Board Area */}
               <div className="flex-1 flex flex-col-reverse sm:flex-col gap-8 items-center justify-center p-4 overflow-y-auto relative pb-8">
                 {/* Status Message - Responsive HUD (Pill on Mobile, Square on Web) */}
-                <div className="sm:absolute sm:right-8 lg:right-24 sm:top-[45%] sm:-translate-y-1/2 z-50 mt-0 sm:mt-0 mb-0">
+                <div className="hidden sm:flex sm:absolute sm:right-8 lg:right-24 sm:top-[45%] sm:-translate-y-1/2 z-50 sm:mt-0 mb-0">
                   <motion.div
                     className={`
                       flex items-center justify-center gap-2 font-bold transition-all duration-500 text-center box-border
@@ -758,8 +758,19 @@ export function OnlineGameView({ roomId, onBack, profile }: OnlineGameViewProps)
                     </div>
                   </div>
                 </div>
-                <div className={`px-3 py-1.5 rounded-md font-mono text-lg font-bold min-w-[70px] text-center ${(playerColor === 'white' ? whiteTimer : blackTimer) < 10 ? 'animate-pulse text-red-500' : ''}`} style={{ backgroundColor: theme.appBackground + '80', color: (playerColor === 'white' ? whiteTimer : blackTimer) < 10 ? '#ef4444' : theme.textColor }}>
-                  {formatTime(playerColor === 'white' ? whiteTimer : blackTimer)}
+                <div className="flex items-center gap-3">
+                  <div className="sm:hidden font-bold text-xs animate-pulse text-right" style={{ color: theme.accentColor }}>
+                    {gameState.phase === 'gameOver'
+                      ? (gameState.winner === playerColor ? 'You Win!' : 'You Lose')
+                      : (!isPlayerTurn ? "Opponent's Turn" : (
+                        gameState.mustRemove ? 'Remove Piece!' :
+                          (gameState.phase === 'placing' ? 'Place Piece' : 'Move Piece')
+                      ))
+                    }
+                  </div>
+                  <div className={`px-3 py-1.5 rounded-md font-mono text-lg font-bold min-w-[70px] text-center ${(playerColor === 'white' ? whiteTimer : blackTimer) < 10 ? 'animate-pulse text-red-500' : ''}`} style={{ backgroundColor: theme.appBackground + '80', color: (playerColor === 'white' ? whiteTimer : blackTimer) < 10 ? '#ef4444' : theme.textColor }}>
+                    {formatTime(playerColor === 'white' ? whiteTimer : blackTimer)}
+                  </div>
                 </div>
               </div>
 
