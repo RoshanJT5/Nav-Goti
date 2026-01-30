@@ -220,14 +220,10 @@ export function GameChat({
 
       {/* Chat Panel - Full Screen Overlay on Mobile for Keyboard Stability */}
       <div
-        className="fixed inset-0 z-[70] transition-all duration-300 ease-out flex flex-col"
+        className="fixed inset-0 z-[70] transition-transform duration-300 ease-out flex flex-col"
         style={{
           transform: isOpen ? 'translateY(0)' : 'translateY(100%)',
           backgroundColor: theme.cardBg,
-          // Remove rounded corners on mobile for full immersion/stability, or keep them if preferred. Keeping for consistency but top-aligned.
-          // borderTopLeftRadius: '20px',
-          // borderTopRightRadius: '20px',
-          // boxShadow: '0 -8px 32px rgba(0,0,0,0.4)',
         }}
       >
         {/* Header with Close Button */}
@@ -296,7 +292,6 @@ export function GameChat({
           style={{
             backgroundColor: theme.headerBg,
             borderColor: theme.lineColor + '10',
-            paddingBottom: '1.5rem'
           }}
         >
           <Input

@@ -645,7 +645,7 @@ export function OnlineGameView({ roomId, onBack, profile }: OnlineGameViewProps)
               </div>
 
               {/* Board Area */}
-              <div className="flex-1 flex flex-col-reverse sm:flex-col gap-8 items-center justify-center p-4 overflow-hidden relative">
+              <div className="flex-1 flex flex-col items-center justify-center p-2 overflow-hidden relative">
                 {/* Status Message - Responsive HUD (Pill on Mobile, Square on Web) */}
                 <div className="hidden sm:flex sm:absolute sm:right-8 lg:right-24 sm:top-[45%] sm:-translate-y-1/2 z-50 sm:mt-0 mb-0">
                   <motion.div
@@ -703,7 +703,7 @@ export function OnlineGameView({ roomId, onBack, profile }: OnlineGameViewProps)
                     </div>
                   </motion.div>
                 </div>
-                <div className="w-full max-w-[min(100vw-2rem,500px)] aspect-square">
+                <div className="w-full max-w-[min(100vw-2rem,500px)] aspect-square flex items-center justify-center relative z-10">
                   <MorrisBoard
                     gameState={displayState}
                     onPositionClick={handlePositionClick}
