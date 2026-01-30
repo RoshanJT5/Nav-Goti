@@ -42,13 +42,15 @@ export function GameChat({
   const [newMessage, setNewMessage] = useState("");
   const [unreadCount, setUnreadCount] = useState(0);
   const scrollRef = useRef<HTMLDivElement>(null);
-  const messagesEndRef = useRef<HTMLDivElement>(null);
   const theme = getTheme(themeId);
 
   // Auto-scroll to bottom when messages change
   useEffect(() => {
-    if (messagesEndRef.current) {
-      messagesEndRef.current.scrollIntoView({ behavior: "smooth" });
+    if (scrollRef.current) {
+      scrollRef.current.scrollTo({
+        top: scrollRef.current.scrollHeight,
+        behavior: 'smooth'
+      });
     }
   }, [messages, isOpen]);
 
@@ -140,9 +142,13 @@ export function GameChat({
 
   if (variant === 'inline') {
     return (
-      <div className="flex flex-col h-full w-full bg-transparent">
+      <div className="flex flex-col h-full w-full bg-transparent overflow-hidden">
         {/* Messages Area */}
-        <div className="flex-1 overflow-y-auto px-4 py-4" style={{ color: theme.textColor }}>
+        <div
+          ref={scrollRef}
+          className="flex-1 min-h-0 overflow-y-auto px-4 py-4"
+          style={{ color: theme.textColor }}
+        >
           <div className="space-y-4">
             {messages.map((msg) => (
               <div
@@ -176,7 +182,6 @@ export function GameChat({
                 <p className="text-base font-medium" style={{ color: theme.textColor }}>No messages yet. Say hello!</p>
               </div>
             )}
-            <div ref={messagesEndRef} />
           </div>
         </div>
 
@@ -248,7 +253,11 @@ export function GameChat({
         </div>
 
         {/* Messages Area */}
-        <div className="flex-1 overflow-y-auto px-4 py-4 overscroll-contain" style={{ color: theme.textColor }}>
+        <div
+          ref={scrollRef}
+          className="flex-1 min-h-0 overflow-y-auto px-4 py-4 overscroll-contain"
+          style={{ color: theme.textColor }}
+        >
           <div className="space-y-4">
             {messages.map((msg) => (
               <div
@@ -282,7 +291,6 @@ export function GameChat({
                 <p className="text-base font-medium" style={{ color: theme.textColor }}>No messages yet. Say hello!</p>
               </div>
             )}
-            <div ref={messagesEndRef} />
           </div>
         </div>
 

@@ -610,7 +610,7 @@ export function OnlineGameView({ roomId, onBack, profile }: OnlineGameViewProps)
             </motion.div>
           </div>
         ) : (
-          <div className="flex-1 flex lg:flex-row overflow-hidden">
+          <div className="flex-1 flex lg:flex-row h-full overflow-hidden">
             {/* Main Board Area */}
             <div className="flex-1 flex flex-col h-full relative">
               <div className="px-4 py-3 flex items-center justify-between shrink-0 border-b z-10 transition-all duration-300"
@@ -922,6 +922,13 @@ export function OnlineGameView({ roomId, onBack, profile }: OnlineGameViewProps)
                     onUnreadChange={setUnreadMessages}
                     variant="drawer"
                   />
+                  {/* This block is likely intended to be inside GameChat or after it, but not within its props */}
+                  {/* {messages.length === 0 && (
+                    <div className="h-full flex flex-col items-center justify-center py-20 opacity-30 text-center px-4">
+                      <MessageCircle className="w-16 h-16 mb-4" style={{ color: theme.textColor }} />
+                      <p className="text-base font-medium" style={{ color: theme.textColor }}>No messages yet. Say hello!</p>
+                    </div>
+                  )} */}
                 </div>
               )}
             </div>
@@ -939,7 +946,7 @@ export function OnlineGameView({ roomId, onBack, profile }: OnlineGameViewProps)
               </div>
 
               {/* Desktop Controls & History */}
-              <div className="p-4 border-b space-y-4" style={{ borderColor: theme.lineColor + '10' }}>
+              <div className="p-4 border-b space-y-4 shrink-0" style={{ borderColor: theme.lineColor + '10' }}>
                 <div className="grid grid-cols-2 gap-2">
                   <Button
                     onClick={handleSendDrawOffer}
@@ -1036,8 +1043,8 @@ export function OnlineGameView({ roomId, onBack, profile }: OnlineGameViewProps)
 
               {/* Desktop Inline Chat */}
               <div className="flex-1 overflow-hidden flex flex-col">
-                <div className="px-4 py-2 text-xs font-bold opacity-50 uppercase tracking-widest" style={{ color: theme.textColor }}>Chat</div>
-                <div className="flex-1 overflow-hidden relative">
+                <div className="px-4 py-2 text-xs font-bold opacity-50 uppercase tracking-widest shrink-0" style={{ color: theme.textColor }}>Chat</div>
+                <div className="flex-1 overflow-hidden relative min-h-0">
                   <GameChat
                     roomId={roomId}
                     playerId={playerId}
