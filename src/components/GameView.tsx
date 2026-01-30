@@ -321,15 +321,17 @@ export function GameView({
       </div>
 
       {/* Game BoardArea - Centered and Responsive */}
-      <div className={`flex-1 flex items-center justify-center p-2 overflow-hidden relative ${mode === 'local' ? (gameState.currentPlayer === 'white' ? 'flex-col-reverse' : 'flex-col') : 'flex-col'} sm:flex-col`}>
+      <div className="flex-1 flex items-center justify-center p-2 overflow-hidden relative flex-col sm:flex-col">
         {/* Status Message - Responsive HUD (Pill on Mobile, Square on Web) */}
-        <div className={`sm:absolute sm:right-8 lg:right-24 sm:top-[45%] sm:-translate-y-1/2 z-50 ${gameState.currentPlayer === 'white' ? 'mt-2' : 'mb-2'} sm:mt-0 sm:mb-0 transition-all duration-500`}>
-          <AnimatePresence mode="wait">
+        <div className={`
+          absolute left-0 right-0 flex justify-center z-50 transition-all duration-500
+          ${(mode === 'local' && gameState.currentPlayer === 'black') ? 'top-20' : 'bottom-20'}
+          sm:static sm:block sm:w-auto sm:h-auto sm:m-0
+        `}>
+          <div className="sm:absolute sm:right-8 lg:right-24 sm:top-[45%] sm:-translate-y-1/2 w-fit">
             <motion.div
-              key={getStatusMessage()}
               initial={{ opacity: 0, scale: 0.9 }}
               animate={{ opacity: 1, scale: 1 }}
-              exit={{ opacity: 0, scale: 0.9 }}
               className={`
                 flex items-center justify-center gap-2 font-bold transition-all duration-500 text-center box-border
                 /* Mobile: Compact Pill */
@@ -397,7 +399,7 @@ export function GameView({
                 )}
               </div>
             </motion.div>
-          </AnimatePresence>
+          </div>
         </div>
 
         <div className="w-full max-w-[min(100vw-2rem,500px)] aspect-square flex items-center justify-center">
@@ -520,45 +522,47 @@ export function GameView({
       </div>
 
       {/* Game Over Modal */}
-      {gameState.phase === 'gameOver' && (
-        <div className="absolute inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-          <motion.div
-            initial={{ opacity: 0, scale: 0.9 }}
-            animate={{ opacity: 1, scale: 1 }}
-            className="rounded-2xl p-6 shadow-2xl max-w-sm w-full"
-            style={{ backgroundColor: theme.cardBg }}
-          >
-            <div className="text-center mb-6">
-              <Trophy className="w-16 h-16 mx-auto mb-4" style={{ color: theme.accentColor }} />
-              <h2 className="text-2xl font-bold mb-2" style={{ color: theme.titleColor }}>
-                {gameState.winner === 'white' ? whiteName : blackName} Wins!
-              </h2>
-              <p className="text-sm opacity-60" style={{ color: theme.textColor }}>
-                Game completed in {currentMoveIndex + 1} moves
-              </p>
-            </div>
-            <div className="flex flex-col gap-3">
-              <Button
-                onClick={handleNewGame}
-                className="w-full h-12 text-lg font-bold rounded-xl"
-                style={{ backgroundColor: theme.accentColor, color: '#fff' }}
-              >
-                <Sparkles className="w-5 h-5 mr-2" />
-                Play Again
-              </Button>
-              <Button
-                variant="outline"
-                onClick={onBack}
-                className="w-full h-12 font-bold rounded-xl"
-                style={{ borderColor: theme.boardLineColor + '20', color: theme.textColor }}
-              >
-                Back to Menu
-              </Button>
-            </div>
-          </motion.div>
-        </div>
-      )}
-    </div>
+      {
+        gameState.phase === 'gameOver' && (
+          <div className="absolute inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+            <motion.div
+              initial={{ opacity: 0, scale: 0.9 }}
+              animate={{ opacity: 1, scale: 1 }}
+              className="rounded-2xl p-6 shadow-2xl max-w-sm w-full"
+              style={{ backgroundColor: theme.cardBg }}
+            >
+              <div className="text-center mb-6">
+                <Trophy className="w-16 h-16 mx-auto mb-4" style={{ color: theme.accentColor }} />
+                <h2 className="text-2xl font-bold mb-2" style={{ color: theme.titleColor }}>
+                  {gameState.winner === 'white' ? whiteName : blackName} Wins!
+                </h2>
+                <p className="text-sm opacity-60" style={{ color: theme.textColor }}>
+                  Game completed in {currentMoveIndex + 1} moves
+                </p>
+              </div>
+              <div className="flex flex-col gap-3">
+                <Button
+                  onClick={handleNewGame}
+                  className="w-full h-12 text-lg font-bold rounded-xl"
+                  style={{ backgroundColor: theme.accentColor, color: '#fff' }}
+                >
+                  <Sparkles className="w-5 h-5 mr-2" />
+                  Play Again
+                </Button>
+                <Button
+                  variant="outline"
+                  onClick={onBack}
+                  className="w-full h-12 font-bold rounded-xl"
+                  style={{ borderColor: theme.boardLineColor + '20', color: theme.textColor }}
+                >
+                  Back to Menu
+                </Button>
+              </div>
+            </motion.div>
+          </div>
+        )
+      }
+    </div >
   );
 };
 

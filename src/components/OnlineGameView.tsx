@@ -645,9 +645,9 @@ export function OnlineGameView({ roomId, onBack, profile }: OnlineGameViewProps)
               </div>
 
               {/* Board Area */}
-              <div className="flex-1 flex flex-col items-center justify-center p-4 overflow-hidden relative">
+              <div className="flex-1 flex flex-col-reverse sm:flex-col items-center justify-center p-4 overflow-hidden relative">
                 {/* Status Message - Responsive HUD (Pill on Mobile, Square on Web) */}
-                <div className="sm:absolute sm:right-8 lg:right-24 sm:top-[45%] sm:-translate-y-1/2 z-50 mb-4 sm:mb-0">
+                <div className="sm:absolute sm:right-8 lg:right-24 sm:top-[45%] sm:-translate-y-1/2 z-50 mt-24 sm:mt-0 mb-0">
                   <motion.div
                     className={`
                       flex items-center justify-center gap-2 font-bold transition-all duration-500 text-center box-border

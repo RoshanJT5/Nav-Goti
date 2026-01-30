@@ -168,37 +168,28 @@ export function MorrisBoard({
       className="w-full h-full flex justify-center items-center"
     >
       <div
-        className={`relative transition-all duration-500 flex justify-center items-center ${isPeacock ? 'peacock-board-container' : 'rounded-2xl shadow-2xl'}`}
+        className={`relative transition-all duration-500 flex justify-center items-center ${isPeacock ? '' : 'rounded-2xl shadow-2xl'}`}
         style={{
-          width: isPeacock ? undefined : BOARD_SIZE + 60,
-          height: isPeacock ? undefined : BOARD_SIZE + 60,
-          padding: 0,
+          width: 'auto',
+          height: 'auto',
+          padding: '30px',
           backgroundImage: isPeacock
-            ? 'linear-gradient(135deg, rgba(0, 25, 20, 0.95), rgba(0, 10, 10, 0.98))'
+            ? 'none'
             : (theme.id === 'dark' ? 'none' : 'none'),
           backgroundColor: isPeacock
-            ? 'transparent'
+            ? 'rgba(32, 69, 29, 0.8)'
             : (theme.id === 'dark' ? '#000000' : theme.boardBorder),
           boxShadow: isPeacock
-            ? 'none'
+            ? '0 10px 30px rgba(0,0,0,0.5)'
             : (theme.id === 'dark'
               ? '0 0 40px rgba(34, 197, 94, 0.2)'
               : `0 20px 50px rgba(0,0,0,0.4), inset 0 2px 4px rgba(255,255,255,0.2)`),
           transform: `scale(${scale})`,
           border: isPeacock ? 'none' : (theme.id === 'dark' ? '1px solid rgba(34, 197, 94, 0.1)' : 'none'),
-          borderRadius: isPeacock ? '0' : '0',
+          borderRadius: '24px',
           position: 'relative'
         }}
       >
-        {/* Corner Ornaments for Peacock Theme */}
-        {isPeacock && (
-          <>
-            <div className="absolute top-0 left-0 w-8 h-8 border-t-4 border-l-4 border-[#B8860B] rounded-tl-lg -translate-x-1 -translate-y-1" />
-            <div className="absolute top-0 right-0 w-8 h-8 border-t-4 border-r-4 border-[#B8860B] rounded-tr-lg translate-x-1 -translate-y-1" />
-            <div className="absolute bottom-0 left-0 w-8 h-8 border-b-4 border-l-4 border-[#B8860B] rounded-bl-lg -translate-x-1 translate-y-1" />
-            <div className="absolute bottom-0 right-0 w-8 h-8 border-b-4 border-r-4 border-[#B8860B] rounded-br-lg translate-x-1 translate-y-1" />
-          </>
-        )}
 
         <div
           ref={boardContainerRef}
@@ -206,12 +197,12 @@ export function MorrisBoard({
           style={{
             width: BOARD_SIZE,
             height: BOARD_SIZE,
-            background: 'transparent',
+            background: isPeacock ? '#002a20' : theme.boardBg,
             backgroundImage: isPeacock ? 'none' : (theme.boardImage ? `url(${theme.boardImage})` : undefined),
             backdropFilter: isPeacock ? 'blur(4px)' : 'none',
             backgroundSize: 'cover',
             backgroundPosition: 'center',
-            borderRadius: isPeacock ? '8px' : '0',
+            borderRadius: isPeacock ? '16px' : '0',
           }}
         >
           <svg
