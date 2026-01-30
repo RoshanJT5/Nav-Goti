@@ -313,9 +313,20 @@ export function GameView({
           </div>
         </div>
         {gameState.currentPlayer === 'black' && (
-          <div className="flex items-center gap-2">
-            {isAIThinking && <Activity className="w-4 h-4 animate-pulse" style={{ color: theme.accentColor }} />}
-            <div className="w-2 h-2 rounded-full bg-green-500 animate-pulse" />
+          <div className="flex items-center gap-3">
+            <div className="sm:hidden font-bold text-xs animate-pulse text-right" style={{ color: theme.accentColor }}>
+              {gameState.phase === 'gameOver'
+                ? (gameState.winner === 'black' ? 'Wins!' : 'Loses')
+                : (isAIThinking ? 'Thinking...' : (
+                  gameState.mustRemove ? 'Remove Piece!' :
+                    (gameState.phase === 'placing' ? 'Place Piece' : 'Move Piece')
+                ))
+              }
+            </div>
+            <div className="flex items-center gap-2">
+              {isAIThinking && <Activity className="w-4 h-4 animate-pulse" style={{ color: theme.accentColor }} />}
+              <div className="w-2 h-2 rounded-full bg-green-500 animate-pulse" />
+            </div>
           </div>
         )}
       </div>
@@ -439,17 +450,19 @@ export function GameView({
           </div>
         </div>
         <div className="flex items-center gap-3">
-          <div className="sm:hidden font-bold text-xs animate-pulse" style={{ color: theme.accentColor }}>
-            {gameState.phase === 'gameOver'
-              ? (gameState.winner === 'white' ? 'You Win!' : 'You Lose')
-              : (isAIThinking ? 'Thinking...' : (
-                gameState.mustRemove ? 'Remove Piece!' :
-                  (gameState.phase === 'placing' ? 'Place Piece' : 'Move Piece')
-              ))
-            }
-          </div>
           {gameState.currentPlayer === 'white' && (
-            <div className="w-2 h-2 rounded-full bg-green-500 animate-pulse" />
+            <>
+              <div className="sm:hidden font-bold text-xs animate-pulse" style={{ color: theme.accentColor }}>
+                {gameState.phase === 'gameOver'
+                  ? (gameState.winner === 'white' ? 'You Win!' : 'You Lose')
+                  : (isAIThinking ? 'Thinking...' : (
+                    gameState.mustRemove ? 'Remove Piece!' :
+                      (gameState.phase === 'placing' ? 'Place Piece' : 'Move Piece')
+                  ))
+                }
+              </div>
+              <div className="w-2 h-2 rounded-full bg-green-500 animate-pulse" />
+            </>
           )}
         </div>
       </div>
