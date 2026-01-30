@@ -222,7 +222,7 @@ export function GameChat({
       <div
         className="fixed bottom-0 left-0 right-0 z-[70] transition-all duration-300 ease-out flex flex-col"
         style={{
-          height: '70vh',
+          height: '100dvh', // Dynamic Viewport Height for mobile browsers
           transform: isOpen ? 'translateY(0)' : 'translateY(100%)',
           backgroundColor: theme.cardBg,
           borderTopLeftRadius: '20px',
@@ -280,7 +280,9 @@ export function GameChat({
             ))}
             {messages.length === 0 && (
               <div className="h-full flex flex-col items-center justify-center py-20 opacity-30 text-center px-4">
-                <MessageCircle className="w-16 h-16 mb-4" style={{ color: theme.textColor }} />
+                <MessageCircle className="w-16 h-16 mb-4" style={{ color: theme.textColor }}>
+                  {/* Icon content */}
+                </MessageCircle>
                 <p className="text-base font-medium" style={{ color: theme.textColor }}>No messages yet. Say hello!</p>
               </div>
             )}
@@ -290,8 +292,13 @@ export function GameChat({
         {/* Input Area */}
         <form
           onSubmit={handleSendMessage}
-          className="p-4 border-t flex gap-3 shrink-0"
-          style={{ backgroundColor: theme.headerBg, borderColor: theme.lineColor + '10' }}
+          className="p-4 border-t flex gap-3 shrink-0 relative z-[80]"
+          style={{
+            backgroundColor: theme.headerBg,
+            borderColor: theme.lineColor + '10',
+            // Safe area for iPhone home bar and mobile keyboards
+            paddingBottom: 'calc(1rem + env(safe-area-inset-bottom))'
+          }}
         >
           <Input
             value={newMessage}
