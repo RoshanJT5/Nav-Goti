@@ -759,7 +759,7 @@ export function OnlineGameView({ roomId, onBack, profile }: OnlineGameViewProps)
                   </div>
                 </div>
                 <div className="flex items-center gap-3">
-                  <div className="sm:hidden font-bold text-xs animate-pulse text-right" style={{ color: theme.accentColor }}>
+                  <div className="sm:hidden font-bold text-xs animate-pulse text-right w-[110px] shrink-0" style={{ color: theme.accentColor }}>
                     {gameState.phase === 'gameOver'
                       ? (gameState.winner === playerColor ? 'You Win!' : 'You Lose')
                       : (!isPlayerTurn ? "Opponent's Turn" : (
