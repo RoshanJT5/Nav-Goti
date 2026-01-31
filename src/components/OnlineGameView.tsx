@@ -645,7 +645,7 @@ export function OnlineGameView({ roomId, onBack, profile }: OnlineGameViewProps)
               </div>
 
               {/* Board Area */}
-              <div className="flex-1 flex flex-col items-center justify-center p-2 overflow-hidden relative">
+              <div className="w-full flex-1 flex flex-col items-center justify-center p-2 overflow-hidden relative">
                 {/* Status Message - Responsive HUD (Pill on Mobile, Square on Web) */}
                 <div className="hidden sm:flex sm:absolute sm:right-8 lg:right-24 sm:top-[45%] sm:-translate-y-1/2 z-50 sm:mt-0 mb-0">
                   <motion.div
@@ -775,7 +775,7 @@ export function OnlineGameView({ roomId, onBack, profile }: OnlineGameViewProps)
               </div>
 
               {/* Nav Icons (Mobile Only) */}
-              <div className="lg:hidden px-4 py-3 flex items-center justify-around shrink-0 border-t z-10 font-bold" style={{ backgroundColor: theme.headerBg, borderColor: theme.boardLineColor + '20' }}>
+              <div className="w-full lg:hidden px-4 py-3 flex items-center justify-around shrink-0 border-t z-10 font-bold" style={{ backgroundColor: theme.headerBg, borderColor: theme.boardLineColor + '20' }}>
                 {gameState.phase === 'gameOver' || roomStatus === 'finished' ? (
                   <>
                     {!opponentDisconnected && <Button onClick={handlePlayAgain} variant="ghost" className="flex flex-col h-auto py-2" style={{ color: theme.textColor }}><RefreshCw className="w-5 h-5 mb-1" /><span className="text-[10px]">Retry</span></Button>}
