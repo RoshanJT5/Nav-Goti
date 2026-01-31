@@ -180,9 +180,18 @@ export function OnlineGameView({ roomId, onBack, profile }: OnlineGameViewProps)
   useEffect(() => {
     let channel: any = null;
     let pollingInterval: any = null;
+    let heartbeatInterval: any = null;
     let isMounted = true;
 
     const setupSubscription = async () => {
+      // Heartbeat - update last_active every 30s
+      heartbeatInterval = setInterval(async () => {
+        if (!playerColor || !isMounted) return;
+        await supabase.from('game_rooms').update({
+          [`${playerColor}_last_active`]: new Date().toISOString()
+        }).eq('id', roomId).catch(() => {}); // Silent fail
+      }, 30000);
+
       channel = supabase
         .channel(`room:${roomId}`, { config: { broadcast: { self: true }, presence: { key: playerId } } })
         .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'game_rooms', filter: `id=eq.${roomId}` }, (payload: any) => {
@@ -209,12 +218,19 @@ export function OnlineGameView({ roomId, onBack, profile }: OnlineGameViewProps)
             setOpponentDisconnected(false);
           }
         })
-        .on('presence', { event: 'leave' }, (payload: any) => {
-          if (gameStartedRef.current && payload.key !== playerId && gameState.phase !== 'gameOver') {
-            setOpponentDisconnected(true);
-            setOpponentConnected(false);
-            setGameState(prev => ({ ...prev, phase: 'gameOver', winner: playerColor }));
-            supabase.from('game_rooms').update({ status: 'finished', game_state: gameStateToJSON({ ...gameState, phase: 'gameOver', winner: playerColor }) }).eq('id', roomId);
+        .on('presence', { event: 'leave' }, async (payload: any) => {
+          if (payload.key !== playerId) {
+            await supabase.rpc('cleanup_room', { p_room_id: roomId }).catch(() => {});
+            if (gameStartedRef.current && gameState.phase !== 'gameOver') {
+              setOpponentDisconnected(true);
+              setOpponentConnected(false);
+              const forfeitState = { ...gameState, phase: 'gameOver', winner: playerColor as Player };
+              setGameState(forfeitState);
+              await supabase.from('game_rooms').update({ 
+                status: 'finished', 
+                game_state: gameStateToJSON(forfeitState) 
+              }).eq('id', roomId).catch(() => {});
+            }
           }
         })
         .subscribe(async (status: any) => {
@@ -230,13 +246,21 @@ export function OnlineGameView({ roomId, onBack, profile }: OnlineGameViewProps)
           setRoomStatus(room.status);
           setWhiteName(room.white_player_name || 'Guest');
           setBlackName(room.black_player_name || 'Guest');
+          
+          await supabase.rpc('cleanup_room', { p_room_id: roomId }).catch(() => {});
         }
       }, 5000);
     };
 
     setupSubscription();
-    return () => { isMounted = false; clearInterval(pollingInterval); if (channel) supabase.removeChannel(channel); };
-  }, [roomId, playerId, playerName, playerColor, gameState]);
+    return () => { 
+      isMounted = false; 
+      if (pollingInterval) clearInterval(pollingInterval); 
+      if (heartbeatInterval) clearInterval(heartbeatInterval);
+      supabase.rpc('cleanup_room', { p_room_id: roomId }).catch(() => {});
+      if (channel) supabase.removeChannel(channel); 
+    };
+  }, [roomId, playerId, playerName, playerColor]);
 
   // Timer Countdown Logic
   useEffect(() => {
@@ -336,9 +360,7 @@ export function OnlineGameView({ roomId, onBack, profile }: OnlineGameViewProps)
     }
   };
 
-  const handleOfferDraw = () => {
-    alert("Draw offer functionality coming in next update!");
-  };
+// Draw offer stub removed - use handleSendDrawOffer directly
 
   const handlePositionClick = useCallback(async (position: Position) => {
     if (isReviewMode) return; // Disable moves in review mode
@@ -377,28 +399,89 @@ export function OnlineGameView({ roomId, onBack, profile }: OnlineGameViewProps)
     await updateGameState(newState);
   }, [gameState, isPlayerTurn, opponentConnected, roomId]);
 
-  const handlePlayAgain = useCallback(async () => {
-    const { data: room } = await supabase.from('game_rooms').select('*').eq('id', roomId).single();
-    if (room) {
-      const newState = createInitialState();
-      await supabase.from('game_rooms').update({
-        white_player_id: room.black_player_id,
-        white_player_name: room.black_player_name,
-        black_player_id: room.white_player_id,
-        black_player_name: room.white_player_name,
-        game_state: gameStateToJSON(newState),
-        status: 'playing',
-        forfeit_winner: null
-      }).eq('id', roomId);
-      setGameState(newState);
-      setPlayerColor(prev => prev === 'white' ? 'black' : 'white');
-      setWhiteName(room.black_player_name);
-      setBlackName(room.white_player_name);
-      forfeitHandled.current = false;
-      setWhiteTimer(45);
-      setBlackTimer(45);
-    }
+  // Play again states
+  const [playAgainRequested, setPlayAgainRequested] = useState(false);
+  const [opponentPlayAgain, setOpponentPlayAgain] = useState(false);
+
+  const handlePlayAgainRequest = useCallback(async () => {
+    await supabase.from('game_rooms').update({
+      status: 'waiting_play_again',
+      white_last_active: new Date().toISOString(),
+      black_last_active: new Date().toISOString()
+    }).eq('id', roomId);
+    setPlayAgainRequested(true);
   }, [roomId]);
+
+  const handlePlayAgainConfirm = useCallback(async () => {
+    if (playAgainRequested && opponentPlayAgain) {
+      const { data: room } = await supabase.from('game_rooms').select('*').eq('id', roomId).single();
+      if (room) {
+        const newState = createInitialState();
+        await supabase.from('game_rooms').update({
+          white_player_id: room.black_player_id,
+          white_player_name: room.black_player_name,
+          black_player_id: room.white_player_id,
+          black_player_name: room.white_player_name,
+          game_state: gameStateToJSON(newState),
+          status: 'playing',
+          forfeit_winner: null
+        }).eq('id', roomId);
+        setGameState(newState);
+        setPlayerColor(prev => prev === 'white' ? 'black' : 'white');
+        setWhiteName(room.black_player_name);
+        setBlackName(room.white_player_name);
+        setPlayAgainRequested(false);
+        setOpponentPlayAgain(false);
+        forfeitHandled.current = false;
+        setWhiteTimer(45);
+        setBlackTimer(45);
+      }
+    }
+  }, [roomId, playAgainRequested, opponentPlayAgain]);
+
+    // Consolidated play again logic (fixed duplicates)
+  const [playAgainStatus, setPlayAgainStatus] = useState<'none' | 'requested' | 'waiting_opponent'>('none');
+
+  const handlePlayAgain = useCallback(async () => {
+    await supabase.rpc('cleanup_room', { p_room_id: roomId });
+    const result = await supabase.from('game_rooms').update({
+      status: 'play_again_requested',
+      white_play_again: playerColor === 'white',
+      black_play_again: playerColor === 'black',
+      white_last_active: new Date().toISOString(),
+      black_last_active: new Date().toISOString()
+    }).eq('id', roomId);
+    if (result.error) console.error('Play again request failed');
+    setPlayAgainStatus('requested');
+  }, [roomId, playerColor]);
+
+  // Auto-confirm if both request, poll for status
+  useEffect(() => {
+    const interval = setInterval(async () => {
+      const { data: room } = await supabase.from('game_rooms').select('status, white_play_again, black_play_again').eq('id', roomId).single();
+      if (room && room.white_play_again && room.black_play_again) {
+        const newState = createInitialState();
+        await supabase.from('game_rooms').update({
+          white_player_id: room.black_player_id || playerId,
+          white_player_name: room.black_player_name || playerName,
+          black_player_id: room.white_player_id || playerId,
+          black_player_name: room.white_player_name || playerName,
+          game_state: gameStateToJSON(newState),
+          status: 'playing',
+          forfeit_winner: null,
+          white_play_again: false,
+          black_play_again: false
+        }).eq('id', roomId);
+        setGameState(newState);
+        setPlayerColor(prev => prev === 'white' ? 'black' : 'white');
+        setPlayAgainStatus('none');
+        forfeitHandled.current = false;
+        setWhiteTimer(45);
+        setBlackTimer(45);
+      }
+    }, 2000);
+    return () => clearInterval(interval);
+  }, [roomId, playerId, playerName]);
 
   const getStatusMessage = () => {
     if (roomStatus === 'loading') return 'Connecting...';
@@ -645,7 +728,7 @@ export function OnlineGameView({ roomId, onBack, profile }: OnlineGameViewProps)
               </div>
 
               {/* Board Area */}
-              <div className="flex-1 flex flex-col items-center justify-center p-2 overflow-hidden relative">
+              <div className="flex-1 flex flex-col items-center justify-center p-0 sm:p-2 overflow-hidden relative">
                 {/* Status Message - Responsive HUD (Pill on Mobile, Square on Web) */}
                 <div className="hidden sm:flex sm:absolute sm:right-8 lg:right-24 sm:top-[45%] sm:-translate-y-1/2 z-50 sm:mt-0 mb-0">
                   <motion.div
@@ -703,7 +786,7 @@ export function OnlineGameView({ roomId, onBack, profile }: OnlineGameViewProps)
                     </div>
                   </motion.div>
                 </div>
-                <div className="w-full max-w-[min(100vw-2rem,600px)] aspect-square flex items-center justify-center relative z-10">
+                <div className="w-dvw h-dvh max-w-none aspect-square flex items-center justify-center relative z-10 mx-auto p-0 sm:p-2 sm:max-w-[min(100vw-4rem,600px)]">
                   <MorrisBoard
                     gameState={displayState}
                     onPositionClick={handlePositionClick}
@@ -775,7 +858,7 @@ export function OnlineGameView({ roomId, onBack, profile }: OnlineGameViewProps)
               </div>
 
               {/* Nav Icons (Mobile Only) */}
-              <div className="lg:hidden px-4 py-3 flex items-center justify-around shrink-0 border-t z-10 font-bold" style={{ backgroundColor: theme.headerBg, borderColor: theme.boardLineColor + '20' }}>
+              <div className="lg:hidden px-2 py-2 flex items-center justify-around shrink-0 border-t z-10 font-bold text-xs sm:text-sm" style={{ backgroundColor: theme.headerBg, borderColor: theme.boardLineColor + '20' }}>
                 {gameState.phase === 'gameOver' || roomStatus === 'finished' ? (
                   <>
                     {!opponentDisconnected && <Button onClick={handlePlayAgain} variant="ghost" className="flex flex-col h-auto py-2" style={{ color: theme.textColor }}><RefreshCw className="w-5 h-5 mb-1" /><span className="text-[10px]">Retry</span></Button>}
