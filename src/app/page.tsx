@@ -386,7 +386,7 @@ export default function Home() {
             borderColor: theme.id === 'peacock' ? 'rgba(255, 215, 0, 0.3)' : theme.boardLineColor + '20'
           }}
         >
-          <div className="max-w-7xl mx-auto flex items-center justify-between">
+          <div className="w-full max-w-7xl mx-auto flex items-center justify-between">
             <div className="flex items-center gap-2">
               <div
                 className="w-10 h-10 rounded-lg flex items-center justify-center shadow-lg"
@@ -451,7 +451,7 @@ export default function Home() {
           </div>
         </header>
 
-        <main className="max-w-7xl mx-auto px-4 py-8 md:py-12 flex-1">
+        <main className="w-full max-w-7xl mx-auto px-4 py-8 md:py-12 flex-1">
           <motion.div
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
