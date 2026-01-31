@@ -386,7 +386,7 @@ export default function Home() {
             borderColor: theme.id === 'peacock' ? 'rgba(255, 215, 0, 0.3)' : theme.boardLineColor + '20'
           }}
         >
-          <div className="max-w-6xl mx-auto flex items-center justify-between">
+          <div className="max-w-7xl mx-auto flex items-center justify-between">
             <div className="flex items-center gap-2">
               <div
                 className="w-10 h-10 rounded-lg flex items-center justify-center shadow-lg"
@@ -451,7 +451,7 @@ export default function Home() {
           </div>
         </header>
 
-        <main className="max-w-6xl mx-auto px-4 py-12 flex-1">
+        <main className="max-w-7xl mx-auto px-4 py-8 md:py-12 flex-1">
           <motion.div
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
@@ -460,13 +460,13 @@ export default function Home() {
             <h1 className="text-5xl md:text-6xl font-bold mb-4" style={{ color: theme.id === 'classic' ? '#629924' : theme.titleColor }}>
               Nav Goti
             </h1>
-            <p className={`text-xl max-w-2xl mx-auto opacity-80 ${theme.id === 'modern' ? 'text-gray-800' : 'text-white'}`}>
+            <p className={`text-xl max-w-3xl mx-auto opacity-80 ${theme.id === 'modern' ? 'text-gray-800' : 'text-white'}`}>
               The ancient strategy game from Sindhu, India. Form mills, capture pieces, and
               outsmart your opponent.
             </p>
           </motion.div>
 
-          <div className="grid md:grid-cols-3 gap-6 max-w-4xl mx-auto">
+          <div className="grid md:grid-cols-3 gap-6 max-w-5xl mx-auto">
             <motion.div
               initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
@@ -474,7 +474,7 @@ export default function Home() {
             >
               <button
                 onClick={() => startGame('ai')}
-                className="w-full h-full border rounded-xl p-6 transition-all hover:scale-[1.02] hover:shadow-xl group text-left backdrop-blur-xl"
+                className="w-full h-full border rounded-xl p-4 sm:p-6 transition-all hover:scale-[1.02] hover:shadow-xl group text-left backdrop-blur-xl"
                 style={{
                   backgroundColor: theme.cardBg,
                   borderColor: theme.id === 'peacock' ? 'rgba(0, 255, 204, 0.5)' : theme.boardLineColor + '20',
@@ -510,7 +510,7 @@ export default function Home() {
             >
               <button
                 onClick={() => startGame('local')}
-                className="w-full h-full border rounded-xl p-6 transition-all hover:scale-[1.02] hover:shadow-xl group text-left backdrop-blur-xl"
+                className="w-full h-full border rounded-xl p-4 sm:p-6 transition-all hover:scale-[1.02] hover:shadow-xl group text-left backdrop-blur-xl"
                 style={{
                   backgroundColor: theme.cardBg,
                   borderColor: theme.id === 'peacock' ? 'rgba(255, 215, 0, 0.5)' : theme.boardLineColor + '20',
@@ -546,7 +546,7 @@ export default function Home() {
             >
               <button
                 onClick={() => startGame('online')}
-                className="w-full h-full border rounded-xl p-6 transition-all hover:scale-[1.02] hover:shadow-xl group text-left backdrop-blur-xl"
+                className="w-full h-full border rounded-xl p-4 sm:p-6 transition-all hover:scale-[1.02] hover:shadow-xl group text-left backdrop-blur-xl"
                 style={{
                   backgroundColor: theme.cardBg,
                   borderColor: theme.id === 'peacock' ? 'rgba(236, 72, 153, 0.4)' : theme.boardLineColor + '20',
@@ -580,9 +580,9 @@ export default function Home() {
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ delay: 0.4 }}
-            className="mt-12 max-w-4xl mx-auto"
+            className="mt-12 max-w-5xl mx-auto"
           >
-            <div className="rounded-xl p-6 border shadow-lg" style={{ backgroundColor: theme.cardBg, borderColor: theme.boardLineColor + '20' }}>
+            <div className="rounded-xl p-4 sm:p-6 border shadow-lg" style={{ backgroundColor: theme.cardBg, borderColor: theme.boardLineColor + '20' }}>
               <h3 className="text-lg font-bold mb-4 flex items-center gap-2" style={{ color: theme.isDark ? '#ffffff' : '#1f2937' }}>
                 <BookOpen className="w-5 h-5" style={{ color: theme.accentColor }} />
                 Quick Rules

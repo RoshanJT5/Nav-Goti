@@ -252,7 +252,7 @@ export function GameView({
       )}
       {/* Compact Header */}
       <header
-        className="border-b px-3 py-2 transition-colors duration-500 flex-shrink-0"
+        className="border-b px-4 py-2 transition-colors duration-500 flex-shrink-0"
         style={{ backgroundColor: theme.headerBg, borderColor: theme.boardLineColor + '20' }}
       >
         <div className="flex items-center justify-between">
@@ -333,7 +333,7 @@ export function GameView({
 
       {/* Game BoardArea - Centered and Responsive */}
       <div className={`flex-1 flex items-center justify-center p-2 overflow-y-auto relative sm:flex-col gap-8 pb-8 ${(mode === 'local' && gameState.currentPlayer === 'black') ? 'flex-col-reverse' : 'flex-col'}`}>
-        <div className="w-full max-w-[min(100vw-2rem,500px)] aspect-square flex items-center justify-center">
+        <div className="w-full max-w-[min(100vw-2rem,600px)] aspect-square flex items-center justify-center">
           <MorrisBoard
             gameState={gameState}
             onPositionClick={handlePositionClick}
@@ -469,7 +469,7 @@ export function GameView({
 
       {/* Bottom Action Bar */}
       <div
-        className="px-3 py-2 border-t flex items-center gap-2 flex-shrink-0"
+        className="px-4 py-2 border-t flex items-center gap-2 flex-shrink-0"
         style={{ backgroundColor: theme.headerBg, borderColor: theme.boardLineColor + '20' }}
       >
         <Button
@@ -547,7 +547,7 @@ export function GameView({
             <motion.div
               initial={{ opacity: 0, scale: 0.9 }}
               animate={{ opacity: 1, scale: 1 }}
-              className="rounded-2xl p-6 shadow-2xl max-w-sm w-full"
+              className="rounded-2xl p-5 sm:p-6 shadow-2xl max-w-sm w-full"
               style={{ backgroundColor: theme.cardBg }}
             >
               <div className="text-center mb-6">

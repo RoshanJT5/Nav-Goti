@@ -297,7 +297,7 @@ export function MatchmakingView({ onMatch, onCancel, profile }: MatchmakingViewP
         <motion.div
           initial={{ opacity: 0, scale: 0.95 }}
           animate={{ opacity: 1, scale: 1 }}
-          className="rounded-xl p-8 text-center max-w-md w-full border backdrop-blur-xl shadow-2xl"
+          className="rounded-xl p-5 sm:p-8 text-center max-w-md w-full border backdrop-blur-xl shadow-2xl"
           style={{
             backgroundColor: theme.cardBg,
             borderColor: theme.id === 'peacock' ? 'rgba(255, 215, 0, 0.5)' : theme.boardLineColor + '20',

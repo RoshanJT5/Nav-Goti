@@ -527,7 +527,7 @@ export function OnlineGameView({ roomId, onBack, profile }: OnlineGameViewProps)
       {/* Main Content Layer */}
       <div className="relative z-10 flex flex-col h-full">
         <header
-          className="border-b px-3 py-2 shrink-0 sticky top-0 z-50 backdrop-blur-md"
+          className="border-b px-4 py-2 shrink-0 sticky top-0 z-50 backdrop-blur-md"
           style={{
             backgroundColor: theme.headerBg,
             borderColor: theme.id === 'peacock' ? 'rgba(255, 215, 0, 0.3)' : theme.boardLineColor + '20'
@@ -561,7 +561,7 @@ export function OnlineGameView({ roomId, onBack, profile }: OnlineGameViewProps)
             <motion.div
               initial={{ scale: 0.9, opacity: 0 }}
               animate={{ scale: 1, opacity: 1 }}
-              className="rounded-xl p-8 text-center max-w-md w-full border backdrop-blur-xl shadow-2xl"
+              className="rounded-xl p-5 sm:p-8 text-center max-w-md w-full border backdrop-blur-xl shadow-2xl"
               style={{
                 backgroundColor: theme.cardBg,
                 borderColor: theme.id === 'peacock' ? 'rgba(255, 215, 0, 0.5)' : theme.boardLineColor + '20',
@@ -703,7 +703,7 @@ export function OnlineGameView({ roomId, onBack, profile }: OnlineGameViewProps)
                     </div>
                   </motion.div>
                 </div>
-                <div className="w-full max-w-[min(100vw-2rem,500px)] aspect-square flex items-center justify-center relative z-10">
+                <div className="w-full max-w-[min(100vw-2rem,600px)] aspect-square flex items-center justify-center relative z-10">
                   <MorrisBoard
                     gameState={displayState}
                     onPositionClick={handlePositionClick}
@@ -775,7 +775,7 @@ export function OnlineGameView({ roomId, onBack, profile }: OnlineGameViewProps)
               </div>
 
               {/* Nav Icons (Mobile Only) */}
-              <div className="lg:hidden px-2 py-3 flex items-center justify-around shrink-0 border-t z-10 font-bold" style={{ backgroundColor: theme.headerBg, borderColor: theme.boardLineColor + '20' }}>
+              <div className="lg:hidden px-4 py-3 flex items-center justify-around shrink-0 border-t z-10 font-bold" style={{ backgroundColor: theme.headerBg, borderColor: theme.boardLineColor + '20' }}>
                 {gameState.phase === 'gameOver' || roomStatus === 'finished' ? (
                   <>
                     {!opponentDisconnected && <Button onClick={handlePlayAgain} variant="ghost" className="flex flex-col h-auto py-2" style={{ color: theme.textColor }}><RefreshCw className="w-5 h-5 mb-1" /><span className="text-[10px]">Retry</span></Button>}
