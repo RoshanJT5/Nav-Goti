@@ -67,12 +67,10 @@ export function GameChat({
     let isSubscribed = true;
 
     const fetchMessages = async () => {
-      const oneHourAgo = new Date(Date.now() - 60 * 60 * 1000).toISOString();
       const { data, error } = await supabase
         .from('game_chat')
         .select('*')
         .eq('room_id', roomId)
-        .gt('created_at', oneHourAgo)
         .order('created_at', { ascending: true });
 
       if (error && error.code !== 'PGRST116') {

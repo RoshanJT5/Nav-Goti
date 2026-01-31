@@ -21,10 +21,8 @@ export interface GameRoom {
   white_player_name: string | null;
   black_player_id: string | null;
   black_player_name: string | null;
-  white_play_again: boolean;
-  black_play_again: boolean;
   game_state: GameStateJSON;
-  status: 'waiting' | 'playing' | 'finished' | 'forfeited' | 'play_again_requested' | 'both_ready_play_again';
+  status: 'waiting' | 'playing' | 'finished' | 'forfeited';
   created_at: string;
   updated_at: string;
   white_last_active: string | null;

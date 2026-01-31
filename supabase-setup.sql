@@ -89,8 +89,6 @@ CREATE TABLE IF NOT EXISTS public.game_rooms (
   white_player_name TEXT,
   black_player_id TEXT,
   black_player_name TEXT,
-  white_play_again BOOLEAN DEFAULT false,
-  black_play_again BOOLEAN DEFAULT false,
   game_state JSONB NOT NULL,
   status TEXT NOT NULL DEFAULT 'waiting',
   created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
@@ -268,52 +266,6 @@ DO $$ BEGIN
   
   DROP TRIGGER IF EXISTS update_game_rooms_updated_at ON public.game_rooms;
   CREATE TRIGGER update_game_rooms_updated_at BEFORE UPDATE ON public.game_rooms FOR EACH ROW EXECUTE FUNCTION public.update_updated_at_column();
-END $$;
-
--- ==========================================
--- 8. ROOM CLEANUP TRIGGER & FUNCTION
--- ==========================================
--- Function to cleanup abandoned rooms (both players inactive > 5min, status not playing)
-CREATE OR REPLACE FUNCTION public.cleanup_abandoned_rooms()
-RETURNS void AS $$
-BEGIN
-  DELETE FROM public.game_rooms
-  WHERE (status = 'finished' OR status = 'forfeited' OR status = 'waiting')
-  AND (COALESCE(white_last_active, created_at) < NOW() - INTERVAL '5 minutes')
-  AND (COALESCE(black_last_active, created_at) < NOW() - INTERVAL '5 minutes');
-  
-  -- Also cleanup old chat messages for deleted rooms (optional)
-  DELETE FROM public.game_chat WHERE room_id NOT IN (SELECT id FROM public.game_rooms);
-END;
-$$ LANGUAGE plpgsql SECURITY DEFINER;
-
--- RPC for manual cleanup call from frontend
-CREATE OR REPLACE FUNCTION public.rpc_cleanup_room(p_room_id TEXT)
-RETURNS void AS $$
-BEGIN
-  UPDATE public.game_rooms 
-  SET white_last_active = NOW(), black_last_active = NOW() 
-  WHERE id = p_room_id 
-  AND (white_player_id IS NULL OR black_player_id IS NULL);
-  
-  PERFORM public.cleanup_abandoned_rooms();
-END;
-$$ LANGUAGE plpgsql SECURITY DEFINER;
-
--- Scheduled cleanup (run every 5 min via pg_cron or Supabase cron)
--- For now, call manually or via edge function
-
--- ==========================================
--- 9. TIGHTENED RLS POLICIES (Since no auth, using permissive but with cleanup)
--- ==========================================
--- For game_rooms: Allow SELECT if status finished or player in room (but no auth check feasible)
--- Keep permissive SELECT, rely on cleanup + frontend validation
-
--- Enhanced policy for game_chat: Limit to recent messages
-DO $$ BEGIN
-  DROP POLICY IF EXISTS "Anyone can view chat messages" ON public.game_chat;
-  CREATE POLICY "Recent chat messages visible" ON public.game_chat 
-  FOR SELECT USING (created_at > NOW() - INTERVAL '1 hour');
 END $$;
 
 -- ==========================================
