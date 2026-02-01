@@ -156,6 +156,8 @@ object AIModule {
 
     private fun isGameOver(state: GameState): Boolean {
         if (state.player1PiecesLeftToPlace > 0 || state.player2PiecesLeftToPlace > 0) return false
-        return state.player1PiecesOnBoard < 3 || state.player2PiecesOnBoard < 3
+        if (state.player1PiecesOnBoard < 3 || state.player2PiecesOnBoard < 3) return true
+        if (countPossibleMoves(state.turn, state) == 0) return true
+        return false
     }
 }

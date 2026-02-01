@@ -95,7 +95,9 @@ CREATE TABLE IF NOT EXISTS public.game_rooms (
   updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
   white_last_active TIMESTAMP WITH TIME ZONE,
   black_last_active TIMESTAMP WITH TIME ZONE,
-  forfeit_winner TEXT
+  forfeit_winner TEXT,
+  white_wants_play_again BOOLEAN DEFAULT FALSE,
+  black_wants_play_again BOOLEAN DEFAULT FALSE
 );
 
 -- Add columns if they don't exist (for existing tables)
@@ -108,6 +110,12 @@ DO $$ BEGIN
   END IF;
   IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'game_rooms' AND column_name = 'forfeit_winner') THEN
     ALTER TABLE public.game_rooms ADD COLUMN forfeit_winner TEXT;
+  END IF;
+  IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'game_rooms' AND column_name = 'white_wants_play_again') THEN
+    ALTER TABLE public.game_rooms ADD COLUMN white_wants_play_again BOOLEAN DEFAULT FALSE;
+  END IF;
+  IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'game_rooms' AND column_name = 'black_wants_play_again') THEN
+    ALTER TABLE public.game_rooms ADD COLUMN black_wants_play_again BOOLEAN DEFAULT FALSE;
   END IF;
 END $$;
 
@@ -239,9 +247,25 @@ END $$;
 CREATE OR REPLACE FUNCTION public.cleanup_old_queue_entries()
 RETURNS void AS $$
 BEGIN
+  -- Cleanup stale matchmaking entries
   DELETE FROM public.matchmaking_queue
   WHERE created_at < NOW() - INTERVAL '10 minutes'
   AND status = 'waiting';
+
+  -- Cleanup stale/empty game rooms (no activity for 1 hour or manually marked for deletion)
+  DELETE FROM public.game_rooms
+  WHERE updated_at < NOW() - INTERVAL '1 hour'
+  AND status = 'finished';
+END;
+$$ LANGUAGE plpgsql;
+
+-- Admin function to delete a room and all its related data
+CREATE OR REPLACE FUNCTION public.delete_game_room_data(room_uuid TEXT)
+RETURNS void AS $$
+BEGIN
+  DELETE FROM public.game_chat WHERE room_id = room_uuid;
+  DELETE FROM public.draw_offers WHERE room_id = room_uuid;
+  DELETE FROM public.game_rooms WHERE id = room_uuid;
 END;
 $$ LANGUAGE plpgsql;
 

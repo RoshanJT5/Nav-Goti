@@ -102,6 +102,8 @@ export function OnlineGameView({ roomId, onBack, profile }: OnlineGameViewProps)
   const [unreadMessages, setUnreadMessages] = useState(0);
   const [whiteTimer, setWhiteTimer] = useState(45);
   const [blackTimer, setBlackTimer] = useState(45);
+  const [whiteWantsPlayAgain, setWhiteWantsPlayAgain] = useState(false);
+  const [blackWantsPlayAgain, setBlackWantsPlayAgain] = useState(false);
   const timerRef = useRef<NodeJS.Timeout | null>(null);
 
   // History and Review states
@@ -200,7 +202,18 @@ export function OnlineGameView({ roomId, onBack, profile }: OnlineGameViewProps)
           setOpponentConnected(room.black_player_id !== null && room.white_player_id !== null);
           setWhiteName(room.white_player_name || 'Guest');
           setBlackName(room.black_player_name || 'Guest');
+          setWhiteWantsPlayAgain(room.white_wants_play_again || false);
+          setBlackWantsPlayAgain(room.black_wants_play_again || false);
+
           if (room.status === 'playing' && !gameStartedRef.current) gameStartedRef.current = true;
+
+          // Check for Play Again consensus
+          if (room.white_wants_play_again && room.black_wants_play_again && room.status === 'playing' && serverState.phase === 'placing' && serverState.moveHistory?.length === 0) {
+            // Success reset
+            forfeitHandled.current = false;
+            setWhiteTimer(45);
+            setBlackTimer(45);
+          }
         })
         .on('presence', { event: 'sync' }, () => {
           const state = channel?.presenceState() || {};
@@ -209,12 +222,19 @@ export function OnlineGameView({ roomId, onBack, profile }: OnlineGameViewProps)
             setOpponentDisconnected(false);
           }
         })
-        .on('presence', { event: 'leave' }, (payload: any) => {
+        .on('presence', { event: 'leave' }, async (payload: any) => {
           if (gameStartedRef.current && payload.key !== playerId && gameState.phase !== 'gameOver') {
             setOpponentDisconnected(true);
             setOpponentConnected(false);
             setGameState(prev => ({ ...prev, phase: 'gameOver', winner: playerColor }));
             supabase.from('game_rooms').update({ status: 'finished', game_state: gameStateToJSON({ ...gameState, phase: 'gameOver', winner: playerColor }) }).eq('id', roomId);
+          }
+
+          // Security & Cleanup: Check if anyone is left
+          const state = channel?.presenceState() || {};
+          if (Object.keys(state).length === 0) {
+            console.log("Room empty, cleaning up...");
+            await supabase.rpc('delete_game_room_data', { room_uuid: roomId });
           }
         })
         .subscribe(async (status: any) => {
@@ -273,6 +293,26 @@ export function OnlineGameView({ roomId, onBack, profile }: OnlineGameViewProps)
     setWhiteTimer(45);
     setBlackTimer(45);
   }, [gameState.currentPlayer, gameState.moveHistory?.length]);
+
+  // Consensus Play Again Trigger
+  useEffect(() => {
+    const checkConsensus = async () => {
+      if (whiteWantsPlayAgain && blackWantsPlayAgain) {
+        // Only one player (white) should perform the reset to avoid race conditions
+        if (playerColor === 'white') {
+          const newState = createInitialState();
+          await supabase.from('game_rooms').update({
+            game_state: gameStateToJSON(newState),
+            status: 'playing',
+            forfeit_winner: null,
+            white_wants_play_again: false,
+            black_wants_play_again: false
+          }).eq('id', roomId);
+        }
+      }
+    };
+    checkConsensus();
+  }, [whiteWantsPlayAgain, blackWantsPlayAgain, playerColor, roomId]);
 
   const handleTimerForfeit = async (timedOutPlayer: 'white' | 'black') => {
     if (forfeitHandled.current || gameState.phase === 'gameOver') return;
@@ -337,7 +377,7 @@ export function OnlineGameView({ roomId, onBack, profile }: OnlineGameViewProps)
   };
 
   const handleOfferDraw = () => {
-    alert("Draw offer functionality coming in next update!");
+    handleSendDrawOffer();
   };
 
   const handlePositionClick = useCallback(async (position: Position) => {
@@ -378,27 +418,14 @@ export function OnlineGameView({ roomId, onBack, profile }: OnlineGameViewProps)
   }, [gameState, isPlayerTurn, opponentConnected, roomId]);
 
   const handlePlayAgain = useCallback(async () => {
-    const { data: room } = await supabase.from('game_rooms').select('*').eq('id', roomId).single();
-    if (room) {
-      const newState = createInitialState();
-      await supabase.from('game_rooms').update({
-        white_player_id: room.black_player_id,
-        white_player_name: room.black_player_name,
-        black_player_id: room.white_player_id,
-        black_player_name: room.white_player_name,
-        game_state: gameStateToJSON(newState),
-        status: 'playing',
-        forfeit_winner: null
-      }).eq('id', roomId);
-      setGameState(newState);
-      setPlayerColor(prev => prev === 'white' ? 'black' : 'white');
-      setWhiteName(room.black_player_name);
-      setBlackName(room.white_player_name);
-      forfeitHandled.current = false;
-      setWhiteTimer(45);
-      setBlackTimer(45);
-    }
-  }, [roomId]);
+    if (!playerColor) return;
+
+    const updateField = playerColor === 'white' ? 'white_wants_play_again' : 'black_wants_play_again';
+
+    await supabase.from('game_rooms')
+      .update({ [updateField]: true })
+      .eq('id', roomId);
+  }, [roomId, playerColor]);
 
   const getStatusMessage = () => {
     if (roomStatus === 'loading') return 'Connecting...';
@@ -967,10 +994,12 @@ export function OnlineGameView({ roomId, onBack, profile }: OnlineGameViewProps)
                 {(gameState.phase === 'gameOver' || roomStatus === 'finished') && !opponentDisconnected && (
                   <Button
                     onClick={handlePlayAgain}
-                    className="w-full font-bold animate-pulse"
+                    className="w-full font-bold transition-all"
                     style={{ backgroundColor: theme.accentColor, color: '#fff' }}
+                    disabled={(playerColor === 'white' ? whiteWantsPlayAgain : blackWantsPlayAgain)}
                   >
-                    <RefreshCw className="mr-2 w-4 h-4" /> Play Again
+                    <RefreshCw className={`mr-2 w-4 h-4 ${(playerColor === 'white' ? whiteWantsPlayAgain : blackWantsPlayAgain) ? 'animate-spin' : ''}`} />
+                    {(playerColor === 'white' ? whiteWantsPlayAgain : blackWantsPlayAgain) ? 'Waiting for Opponent...' : 'Play Again'}
                   </Button>
                 )}
 

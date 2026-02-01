@@ -4,6 +4,10 @@ struct BoardView: View {
     @ObservedObject var state: GameState
     let boardSize: CGFloat = 350
     
+    @State private var dragOffset: CGPoint = .zero
+    @State private var draggedNodeIndex: Int? = nil
+    @State private var isDragging: Bool = false
+    
     var body: some View {
         ZStack {
             AppTheme.background.ignoresSafeArea()
@@ -25,13 +29,21 @@ struct BoardView: View {
                 Canvas { context, size in
                     drawBoardLines(context: context, size: size)
                     drawNodes(context: context, size: size)
+                    drawMoveIndicators(context: context, size: size)
                     drawPieces(context: context, size: size)
+                    
+                    if isDragging, let draggedIdx = draggedNodeIndex {
+                        drawDraggedPiece(context: context, index: draggedIdx)
+                    }
                 }
                 .frame(width: boardSize, height: boardSize)
                 .gesture(
-                    SpatialTapGesture()
+                    DragGesture(minimumDistance: 0)
+                        .onChanged { value in
+                            handleDragChange(value)
+                        }
                         .onEnded { value in
-                            handleTap(at: value.location)
+                            handleDragEnd(value)
                         }
                 )
                 
@@ -50,7 +62,6 @@ struct BoardView: View {
             let start = CGPoint(x: startCoord.x * size.width, y: startCoord.y * size.height)
             
             for endNode in neighbors {
-                // To avoid double drawing, only draw if endNode > startNode
                 if endNode > startNode {
                     guard let endCoord = Board.nodes[endNode] else { continue }
                     let end = CGPoint(x: endCoord.x * size.width, y: endCoord.y * size.height)
@@ -60,7 +71,6 @@ struct BoardView: View {
                     path.addLine(to: end)
                     
                     context.stroke(path, with: .color(AppTheme.neonBorder.opacity(0.5)), lineWidth: 2)
-                    // Glow effect
                     context.addFilter(.shadow(color: AppTheme.neonBorder, radius: 3))
                     context.stroke(path, with: .color(AppTheme.neonBorder), lineWidth: 1)
                 }
@@ -76,38 +86,128 @@ struct BoardView: View {
         }
     }
     
-    private func drawPieces(context: GraphicsContext, size: CGSize) {
-        for (index, type) in state.piecePositions {
-            guard let coord = Board.nodes[index] else { continue }
-            let point = CGPoint(x: coord.x * size.width, y: coord.y * size.height)
-            let color = type == .player1 ? AppTheme.neonCyan : AppTheme.neonPink
-            
-            // Outer glow
-            let glowRect = CGRect(x: point.x - 15, y: point.y - 15, width: 30, height: 30)
-            context.addFilter(.shadow(color: color, radius: 8))
-            context.fill(Path(ellipseIn: glowRect), with: .color(color.opacity(0.4)))
-            
-            // Core piece
-            let pieceRect = CGRect(x: point.x - 10, y: point.y - 10, width: 20, height: 20)
-            context.fill(Path(ellipseIn: pieceRect), with: .color(color))
-            
-            // Selected highlight
-            if state.selectedNodeIndex == index {
-                var selectionPath = Path()
-                selectionPath.addEllipse(in: pieceRect.insetBy(dx: -4, dy: -4))
-                context.stroke(selectionPath, with: .color(.white), lineWidth: 2)
+    private func drawMoveIndicators(context: GraphicsContext, size: CGSize) {
+        guard let selectedIdx = draggedNodeIndex ?? state.selectedNodeIndex else { return }
+        
+        let canFly = (state.turn == .player1 && state.player1PiecesOnBoard == 3) ||
+                     (state.turn == .player2 && state.player2PiecesOnBoard == 3)
+        
+        if canFly {
+            // Show all empty nodes for flying
+            for (idx, coord) in Board.nodes {
+                if state.piecePositions[idx] == nil {
+                    drawIndicator(at: coord, context: context, size: size)
+                }
+            }
+        } else if let neighbors = Board.adjacencyList[selectedIdx] {
+            for neighbor in neighbors {
+                if state.piecePositions[neighbor] == nil {
+                    guard let coord = Board.nodes[neighbor] else { continue }
+                    drawIndicator(at: coord, context: context, size: size)
+                }
             }
         }
     }
     
-    private func handleTap(at location: CGPoint) {
-        let threshold: CGFloat = 20
-        for (index, coord) in Board.nodes {
-            let point = CGPoint(x: coord.x * boardSize, y: coord.y * boardSize)
-            let dist = sqrt(pow(point.x - location.x, 2) + pow(point.y - location.y, 2))
-            if dist < threshold {
-                GameEngine.handleNodeTap(index: index, state: state)
-                break
+    private func drawIndicator(at coord: NodeCoord, context: GraphicsContext, size: CGSize) {
+        let point = CGPoint(x: coord.x * size.width, y: coord.y * size.height)
+        let rect = CGRect(x: point.x - 15, y: point.y - 15, width: 30, height: 30)
+        context.stroke(Path(ellipseIn: rect), with: .color(.green.opacity(0.6)), lineWidth: 2)
+        context.fill(Path(ellipseIn: rect.insetBy(dx: 10, dy: 10)), with: .color(.green.opacity(0.3)))
+    }
+    
+    private func drawPieces(context: GraphicsContext, size: CGSize) {
+        for (index, type) in state.piecePositions {
+            if isDragging && index == draggedNodeIndex { continue }
+            
+            guard let coord = Board.nodes[index] else { continue }
+            let point = CGPoint(x: coord.x * size.width, y: coord.y * size.height)
+            let color = type == .player1 ? AppTheme.neonCyan : AppTheme.neonPink
+            
+            drawPieceAt(point: point, color: color, isSelected: state.selectedNodeIndex == index, context: context)
+        }
+    }
+    
+    private func drawDraggedPiece(context: GraphicsContext, index: Int) {
+        let type = state.piecePositions[index]!
+        let color = type == .player1 ? AppTheme.neonCyan : AppTheme.neonPink
+        drawPieceAt(point: dragOffset, color: color, isSelected: true, context: context, isDragging: true)
+    }
+    
+    private func drawPieceAt(point: CGPoint, color: Color, isSelected: Bool, context: GraphicsContext, isDragging: Bool = false) {
+        let size: CGFloat = isDragging ? 30 : 20
+        let glowSize: CGFloat = size + 10
+        
+        let glowRect = CGRect(x: point.x - glowSize/2, y: point.y - glowSize/2, width: glowSize, height: glowSize)
+        context.addFilter(.shadow(color: color, radius: isDragging ? 12 : 8))
+        context.fill(Path(ellipseIn: glowRect), with: .color(color.opacity(0.4)))
+        
+        let pieceRect = CGRect(x: point.x - size/2, y: point.y - size/2, width: size, height: size)
+        context.fill(Path(ellipseIn: pieceRect), with: .color(color))
+        
+        if isSelected {
+            var selectionPath = Path()
+            selectionPath.addEllipse(in: pieceRect.insetBy(dx: -4, dy: -4))
+            context.stroke(selectionPath, with: .color(.white), lineWidth: 2)
+        }
+    }
+    
+    private func handleDragChange(_ value: DragGesture.Value) {
+        if !isDragging {
+            let threshold: CGFloat = 30
+            for (index, coord) in Board.nodes {
+                let point = CGPoint(x: coord.x * boardSize, y: coord.y * boardSize)
+                let dist = sqrt(pow(point.x - value.startLocation.x, 2) + pow(point.y - value.startLocation.y, 2))
+                if dist < threshold {
+                    if state.piecePositions[index] == (state.turn == .player1 ? .player1 : .player2) {
+                        if state.phase == .moving || state.phase == .flying {
+                            draggedNodeIndex = index
+                            isDragging = true
+                            state.selectedNodeIndex = index // Select for indicators
+                            HapticManager.shared.playSelection()
+                        }
+                    }
+                    break
+                }
+            }
+        }
+        
+        if isDragging {
+            dragOffset = value.location
+        }
+    }
+    
+    private func handleDragEnd(_ value: DragGesture.Value) {
+        if isDragging {
+            let threshold: CGFloat = 30
+            var closestIdx: Int? = nil
+            var minDist: CGFloat = .infinity
+            
+            for (index, coord) in Board.nodes {
+                let point = CGPoint(x: coord.x * boardSize, y: coord.y * boardSize)
+                let dist = sqrt(pow(point.x - value.location.x, 2) + pow(point.y - value.location.y, 2))
+                if dist < threshold && dist < minDist {
+                    closestIdx = index
+                    minDist = dist
+                }
+            }
+            
+            if let targetIdx = closestIdx {
+                GameEngine.handleNodeTap(index: targetIdx, state: state)
+            }
+            
+            isDragging = false
+            draggedNodeIndex = nil
+        } else {
+            // Handle as simple tap
+            let threshold: CGFloat = 30
+            for (index, coord) in Board.nodes {
+                let point = CGPoint(x: coord.x * boardSize, y: coord.y * boardSize)
+                let dist = sqrt(pow(point.x - value.location.x, 2) + pow(point.y - value.location.y, 2))
+                if dist < threshold {
+                    GameEngine.handleNodeTap(index: index, state: state)
+                    break
+                }
             }
         }
     }

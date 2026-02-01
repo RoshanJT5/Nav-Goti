@@ -252,7 +252,7 @@ export function GameView({
       )}
       {/* Compact Header */}
       <header
-        className="border-b px-4 py-2 transition-colors duration-500 flex-shrink-0"
+        className="border-b px-4 py-2 transition-colors duration-500 shrink-0"
         style={{ backgroundColor: theme.headerBg, borderColor: theme.boardLineColor + '20' }}
       >
         <div className="flex items-center justify-between">
@@ -282,7 +282,7 @@ export function GameView({
 
       {/* Top Player Bar (Opponent/Black) */}
       <div
-        className="px-4 py-3 border-b flex items-center justify-between flex-shrink-0 transition-all duration-500"
+        className="px-4 py-3 border-b flex items-center justify-between shrink-0 transition-all duration-500"
         style={{
           backgroundColor: gameState.currentPlayer === 'black'
             ? (theme.id === 'peacock' ? 'rgba(0, 40, 50, 0.95)' : 'rgba(255, 255, 255, 0.08)')
@@ -420,7 +420,7 @@ export function GameView({
 
       {/* Bottom Player Bar (You/White) */}
       <div
-        className="px-4 py-3 border-t flex items-center justify-between flex-shrink-0 transition-all duration-300"
+        className="px-4 py-3 border-t flex items-center justify-between shrink-0 transition-all duration-300"
         style={{
           backgroundColor: gameState.currentPlayer === 'white' ? (theme.id === 'peacock' ? 'rgba(0, 30, 40, 0.95)' : 'rgba(255, 255, 255, 0.05)') : 'transparent',
           borderTop: gameState.currentPlayer === 'white' ? `3px solid ${theme.accentColor}` : '3px solid transparent',
@@ -469,7 +469,7 @@ export function GameView({
 
       {/* Bottom Action Bar */}
       <div
-        className="px-4 py-2 border-t flex items-center gap-2 flex-shrink-0"
+        className="px-4 py-2 border-t flex items-center gap-2 shrink-0"
         style={{ backgroundColor: theme.headerBg, borderColor: theme.boardLineColor + '20' }}
       >
         <Button

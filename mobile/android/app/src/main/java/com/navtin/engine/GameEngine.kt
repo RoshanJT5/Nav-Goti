@@ -134,24 +134,44 @@ object GameEngine {
         // Only check after placement phase
         if (state.player1PiecesLeftToPlace > 0 || state.player2PiecesLeftToPlace > 0) return false
         
-        val currentPlayer = state.turn
-        val piecesOnBoard = if (currentPlayer == PlayerTurn.PLAYER_1) state.player1PiecesOnBoard else state.player2PiecesOnBoard
+        val currentPlayerTurn = state.turn
+        val piecesOnBoard = if (currentPlayerTurn == PlayerTurn.PLAYER_1) state.player1PiecesOnBoard else state.player2PiecesOnBoard
         
         if (piecesOnBoard < 3) {
-            state.message = "Game Over! Player ${if (currentPlayer == PlayerTurn.PLAYER_1) "2" else "1"} Wins!"
+            state.message = "Game Over! Player ${if (currentPlayerTurn == PlayerTurn.PLAYER_1) "2" else "1"} Wins!"
             FeedbackManager.get()?.playWin()
-            // In real app, passes activity context
-            // AdMobManager.showInterstitial(activity)
             println("AdMob: Triggering post-match Interstitial")
             return true
         }
         
-        // ... (Condition 2)
-        if (!hasMoves) {
-            state.message = "No moves! Player ${if (currentPlayer == PlayerTurn.PLAYER_1) "2" else "1"} Wins!"
+        if (!hasValidMoves(currentPlayerTurn, state)) {
+            state.message = "No moves! Player ${if (currentPlayerTurn == PlayerTurn.PLAYER_1) "2" else "1"} Wins!"
             FeedbackManager.get()?.playWin()
             println("AdMob: Triggering post-match Interstitial")
             return true
+        }
+        
+        return false
+    }
+
+    private fun hasValidMoves(player: PlayerTurn, state: GameState): Boolean {
+        val pieceType = if (player == PlayerTurn.PLAYER_1) PieceType.PLAYER_1 else PieceType.PLAYER_2
+        
+        // Flying
+        if ((player == PlayerTurn.PLAYER_1 && state.player1PiecesOnBoard == 3) ||
+            (player == PlayerTurn.PLAYER_2 && state.player2PiecesOnBoard == 3)) {
+            return state.piecePositions.size < 24
+        }
+        
+        // Moving
+        val playerPieces = state.piecePositions.filter { it.value == pieceType }
+        for ((index, _) in playerPieces) {
+            val neighbors = Board.adjacencyList[index] ?: continue
+            for (neighbor in neighbors) {
+                if (!state.piecePositions.containsKey(neighbor)) {
+                    return true
+                }
+            }
         }
         
         return false

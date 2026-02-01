@@ -137,23 +137,47 @@ class GameEngine {
         // Only check after placement phase
         guard state.player1PiecesLeftToPlace == 0 && state.player2PiecesLeftToPlace == 0 else { return false }
         
-        let currentPlayer = state.turn
-        let piecesOnBoard = currentPlayer == .player1 ? state.player1PiecesOnBoard : state.player2PiecesOnBoard
+        let currentPlayerTurn = state.turn
+        let piecesOnBoard = currentPlayerTurn == .player1 ? state.player1PiecesOnBoard : state.player2PiecesOnBoard
         
         // Condition 1: Less than 3 pieces
         if piecesOnBoard < 3 {
-            state.message = "Game Over! Player \(currentPlayer == .player1 ? "2" : "1") Wins!"
+            state.message = "Game Over! Player \(currentPlayerTurn == .player1 ? "2" : "1") Wins!"
             HapticManager.shared.playWin()
             AdMobManager.shared.showInterstitial()
             return true
         }
         
-        // ... (Condition 2)
-        if !hasMoves {
-            state.message = "No moves! Player \(currentPlayer == .player1 ? "2" : "1") Wins!"
+        // Condition 2: No valid moves
+        if !hasValidMoves(for: currentPlayerTurn, state: state) {
+            state.message = "No moves! Player \(currentPlayerTurn == .player1 ? "2" : "1") Wins!"
             HapticManager.shared.playWin()
             AdMobManager.shared.showInterstitial()
             return true
+        }
+        
+        return false
+    }
+    
+    private static func hasValidMoves(for player: PlayerTurn, state: GameState) -> Bool {
+        let pieceType = player == .player1 ? PieceType.player1 : PieceType.player2
+        
+        // If flying, can move to any empty node. If there is at least one empty node, can move.
+        if (player == .player1 && state.player1PiecesOnBoard == 3) ||
+           (player == .player2 && state.player2PiecesOnBoard == 3) {
+            return state.piecePositions.count < 24
+        }
+        
+        // Moving phase: check for adjacency
+        let playerPieces = state.piecePositions.filter { $0.value == pieceType }
+        for (index, _) in playerPieces {
+            if let neighbors = Board.adjacencyList[index] {
+                for neighbor in neighbors {
+                    if state.piecePositions[neighbor] == nil {
+                        return true
+                    }
+                }
+            }
         }
         
         return false

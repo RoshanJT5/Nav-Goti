@@ -20,6 +20,14 @@ export const metadata: Metadata = {
   title: "Nav Goti - Ancient Indian Strategy Game",
   description: "Play Nav Goti, the ancient strategy game from Sindhu, India. Challenge AI, play locally with friends, or compete online against players worldwide.",
   manifest: "/manifest.json",
+  icons: {
+    icon: [
+      { url: "/favicon.png", type: "image/png" },
+      { url: "/favicon.ico", type: "image/x-icon" },
+    ],
+    shortcut: "/favicon.ico",
+    apple: "/apple-touch-icon.png",
+  },
   appleWebApp: {
     capable: true,
     statusBarStyle: "black-translucent",
