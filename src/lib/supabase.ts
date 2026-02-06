@@ -8,12 +8,26 @@ export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
     params: {
       eventsPerSecond: 10,
     },
+    // Keep connection alive even when tab is inactive (prevents game ending on tab switch)
+    // @ts-ignore - worker option exists but may not be in types
+    worker: typeof window !== 'undefined',
   },
   auth: {
     persistSession: true,
     autoRefreshToken: true,
   },
 });
+
+// Connection health monitor for realtime
+if (typeof window !== 'undefined') {
+  // Auto-reconnect on visibility change (when user returns to tab)
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'visible') {
+      // Attempt to reconnect when tab becomes visible again
+      supabase.realtime.connect();
+    }
+  });
+}
 
 export interface GameRoom {
   id: string;

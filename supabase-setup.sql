@@ -97,7 +97,12 @@ CREATE TABLE IF NOT EXISTS public.game_rooms (
   black_last_active TIMESTAMP WITH TIME ZONE,
   forfeit_winner TEXT,
   white_wants_play_again BOOLEAN DEFAULT FALSE,
-  black_wants_play_again BOOLEAN DEFAULT FALSE
+  black_wants_play_again BOOLEAN DEFAULT FALSE,
+  -- Server-side timer columns (10 minutes = 600 seconds)
+  white_time_remaining INTEGER DEFAULT 600,
+  black_time_remaining INTEGER DEFAULT 600,
+  last_move_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+  active_player TEXT DEFAULT 'white'
 );
 
 -- Add columns if they don't exist (for existing tables)
@@ -116,6 +121,19 @@ DO $$ BEGIN
   END IF;
   IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'game_rooms' AND column_name = 'black_wants_play_again') THEN
     ALTER TABLE public.game_rooms ADD COLUMN black_wants_play_again BOOLEAN DEFAULT FALSE;
+  END IF;
+  -- New timer columns
+  IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'game_rooms' AND column_name = 'white_time_remaining') THEN
+    ALTER TABLE public.game_rooms ADD COLUMN white_time_remaining INTEGER DEFAULT 600;
+  END IF;
+  IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'game_rooms' AND column_name = 'black_time_remaining') THEN
+    ALTER TABLE public.game_rooms ADD COLUMN black_time_remaining INTEGER DEFAULT 600;
+  END IF;
+  IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'game_rooms' AND column_name = 'last_move_at') THEN
+    ALTER TABLE public.game_rooms ADD COLUMN last_move_at TIMESTAMP WITH TIME ZONE DEFAULT NOW();
+  END IF;
+  IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'game_rooms' AND column_name = 'active_player') THEN
+    ALTER TABLE public.game_rooms ADD COLUMN active_player TEXT DEFAULT 'white';
   END IF;
 END $$;
 
@@ -268,6 +286,145 @@ BEGIN
   DELETE FROM public.game_rooms WHERE id = room_uuid;
 END;
 $$ LANGUAGE plpgsql;
+
+-- Helper function: Delete room if both players have left
+CREATE OR REPLACE FUNCTION public.delete_room_if_empty(room_uuid TEXT)
+RETURNS BOOLEAN AS $$
+DECLARE
+  room_record RECORD;
+BEGIN
+  SELECT white_player_id, black_player_id INTO room_record
+  FROM public.game_rooms WHERE id = room_uuid;
+  
+  IF NOT FOUND THEN
+    RETURN FALSE;
+  END IF;
+  
+  -- If both players are null, delete the room
+  IF room_record.white_player_id IS NULL AND room_record.black_player_id IS NULL THEN
+    PERFORM public.delete_game_room_data(room_uuid);
+    RETURN TRUE;
+  END IF;
+  
+  RETURN FALSE;
+END;
+$$ LANGUAGE plpgsql;
+
+-- Player leave function: Mark player as left and cleanup if empty
+CREATE OR REPLACE FUNCTION public.mark_player_left(room_uuid TEXT, leaving_player_id TEXT)
+RETURNS JSON AS $$
+DECLARE
+  room_record RECORD;
+  room_deleted BOOLEAN := FALSE;
+  opponent_id TEXT := NULL;
+BEGIN
+  -- Get current room state
+  SELECT white_player_id, black_player_id, status INTO room_record
+  FROM public.game_rooms WHERE id = room_uuid;
+  
+  IF NOT FOUND THEN
+    RETURN json_build_object('success', false, 'error', 'Room not found');
+  END IF;
+  
+  -- Determine which player is leaving and set their ID to null
+  IF room_record.white_player_id = leaving_player_id THEN
+    UPDATE public.game_rooms SET white_player_id = NULL, white_player_name = NULL WHERE id = room_uuid;
+    opponent_id := room_record.black_player_id;
+  ELSIF room_record.black_player_id = leaving_player_id THEN
+    UPDATE public.game_rooms SET black_player_id = NULL, black_player_name = NULL WHERE id = room_uuid;
+    opponent_id := room_record.white_player_id;
+  ELSE
+    RETURN json_build_object('success', false, 'error', 'Player not in room');
+  END IF;
+  
+  -- Check if room is now empty and delete if so
+  room_deleted := public.delete_room_if_empty(room_uuid);
+  
+  RETURN json_build_object(
+    'success', true,
+    'room_deleted', room_deleted,
+    'opponent_id', opponent_id
+  );
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER;
+
+-- ==========================================
+-- 6.3 RECORD MOVE WITH SERVER-SIDE TIMER
+-- ==========================================
+-- This function records a move and calculates time spent server-side
+-- Prevents timer cheating and ensures accurate time tracking
+CREATE OR REPLACE FUNCTION public.record_move(
+  room_uuid TEXT,
+  moving_player TEXT, -- 'white' or 'black'
+  new_game_state JSONB
+)
+RETURNS JSON AS $$
+DECLARE
+  room_record RECORD;
+  time_spent INTEGER;
+  new_time_remaining INTEGER;
+  next_player TEXT;
+BEGIN
+  -- Get current room state
+  SELECT * INTO room_record FROM public.game_rooms WHERE id = room_uuid;
+  
+  IF NOT FOUND THEN
+    RETURN json_build_object('success', false, 'error', 'Room not found');
+  END IF;
+  
+  -- Verify it's actually this player's turn
+  IF room_record.active_player != moving_player THEN
+    RETURN json_build_object('success', false, 'error', 'Not your turn');
+  END IF;
+  
+  -- Calculate time spent since last move (in seconds)
+  time_spent := EXTRACT(EPOCH FROM (NOW() - COALESCE(room_record.last_move_at, NOW())))::INTEGER;
+  
+  -- Determine next player
+  next_player := CASE WHEN moving_player = 'white' THEN 'black' ELSE 'white' END;
+  
+  -- Deduct time from moving player
+  IF moving_player = 'white' THEN
+    new_time_remaining := GREATEST(0, COALESCE(room_record.white_time_remaining, 600) - time_spent);
+    UPDATE public.game_rooms SET 
+      white_time_remaining = new_time_remaining,
+      last_move_at = NOW(),
+      active_player = next_player,
+      game_state = new_game_state,
+      updated_at = NOW()
+    WHERE id = room_uuid;
+  ELSE
+    new_time_remaining := GREATEST(0, COALESCE(room_record.black_time_remaining, 600) - time_spent);
+    UPDATE public.game_rooms SET 
+      black_time_remaining = new_time_remaining,
+      last_move_at = NOW(),
+      active_player = next_player,
+      game_state = new_game_state,
+      updated_at = NOW()
+    WHERE id = room_uuid;
+  END IF;
+  
+  -- Check for timeout
+  IF new_time_remaining <= 0 THEN
+    UPDATE public.game_rooms SET status = 'finished', forfeit_winner = next_player WHERE id = room_uuid;
+    RETURN json_build_object(
+      'success', true, 
+      'timeout', true, 
+      'loser', moving_player,
+      'winner', next_player,
+      'time_remaining', 0
+    );
+  END IF;
+  
+  RETURN json_build_object(
+    'success', true, 
+    'timeout', false,
+    'time_remaining', new_time_remaining,
+    'time_spent', time_spent,
+    'next_player', next_player
+  );
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER;
 
 -- ==========================================
 -- 7. UPDATED_AT TRIGGER

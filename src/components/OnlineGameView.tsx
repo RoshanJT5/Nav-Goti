@@ -100,11 +100,17 @@ export function OnlineGameView({ roomId, onBack, profile }: OnlineGameViewProps)
   const [isChatOpen, setIsChatOpen] = useState(false);
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [unreadMessages, setUnreadMessages] = useState(0);
-  const [whiteTimer, setWhiteTimer] = useState(45);
-  const [blackTimer, setBlackTimer] = useState(45);
+  // Server-synced timers (10 minutes = 600 seconds)
+  const [whiteTimer, setWhiteTimer] = useState(600);
+  const [blackTimer, setBlackTimer] = useState(600);
   const [whiteWantsPlayAgain, setWhiteWantsPlayAgain] = useState(false);
   const [blackWantsPlayAgain, setBlackWantsPlayAgain] = useState(false);
   const timerRef = useRef<NodeJS.Timeout | null>(null);
+
+  // Connection status for reconnection handling
+  const [connectionStatus, setConnectionStatus] = useState<'connected' | 'reconnecting' | 'disconnected'>('connected');
+  const reconnectTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const RECONNECT_GRACE_PERIOD = 30000; // 30 seconds grace period before forfeit
 
   // History and Review states
   const [isReviewMode, setIsReviewMode] = useState(false);
@@ -112,6 +118,31 @@ export function OnlineGameView({ roomId, onBack, profile }: OnlineGameViewProps)
   const displayState = isReviewMode && gameState.historyStates && currentHistoryIndex >= 0
     ? jsonToGameState(gameState.historyStates[currentHistoryIndex])
     : gameState;
+
+  // Room cleanup function - calls the new mark_player_left RPC
+  const handleLeaveRoom = useCallback(async () => {
+    if (!roomId || !playerId) return;
+    try {
+      await supabase.rpc('mark_player_left', { room_uuid: roomId, leaving_player_id: playerId });
+    } catch (err) {
+      console.error('Failed to mark player as left:', err);
+    }
+  }, [roomId, playerId]);
+
+  // beforeunload handler for browser/tab close
+  useEffect(() => {
+    const handleBeforeUnload = () => {
+      // Use sendBeacon for reliable delivery on page close
+      const payload = JSON.stringify({ room_uuid: roomId, leaving_player_id: playerId });
+      navigator.sendBeacon?.(
+        `${process.env.NEXT_PUBLIC_SUPABASE_URL}/rest/v1/rpc/mark_player_left`,
+        new Blob([payload], { type: 'application/json' })
+      );
+    };
+
+    window.addEventListener('beforeunload', handleBeforeUnload);
+    return () => window.removeEventListener('beforeunload', handleBeforeUnload);
+  }, [roomId, playerId]);
 
   useEffect(() => {
     const initRoom = async () => {
@@ -211,9 +242,13 @@ export function OnlineGameView({ roomId, onBack, profile }: OnlineGameViewProps)
           if (room.white_wants_play_again && room.black_wants_play_again && room.status === 'playing' && serverState.phase === 'placing' && serverState.moveHistory?.length === 0) {
             // Success reset
             forfeitHandled.current = false;
-            setWhiteTimer(45);
-            setBlackTimer(45);
+            setWhiteTimer(600);
+            setBlackTimer(600);
           }
+
+          // Sync timers from server (authoritative source)
+          if (room.white_time_remaining !== undefined) setWhiteTimer(room.white_time_remaining);
+          if (room.black_time_remaining !== undefined) setBlackTimer(room.black_time_remaining);
         })
         .on('presence', { event: 'sync' }, () => {
           const state = channel?.presenceState() || {};
@@ -223,11 +258,25 @@ export function OnlineGameView({ roomId, onBack, profile }: OnlineGameViewProps)
           }
         })
         .on('presence', { event: 'leave' }, async (payload: any) => {
+          // Opponent left - start grace period instead of immediate forfeit
           if (gameStartedRef.current && payload.key !== playerId && gameState.phase !== 'gameOver') {
-            setOpponentDisconnected(true);
+            setConnectionStatus('reconnecting');
             setOpponentConnected(false);
-            setGameState(prev => ({ ...prev, phase: 'gameOver', winner: playerColor }));
-            supabase.from('game_rooms').update({ status: 'finished', game_state: gameStateToJSON({ ...gameState, phase: 'gameOver', winner: playerColor }) }).eq('id', roomId);
+
+            // Clear any existing timeout
+            if (reconnectTimeoutRef.current) clearTimeout(reconnectTimeoutRef.current);
+
+            // Start 30-second grace period
+            reconnectTimeoutRef.current = setTimeout(() => {
+              // Only forfeit if still disconnected after grace period
+              setOpponentDisconnected(true);
+              setConnectionStatus('disconnected');
+              setGameState(prev => ({ ...prev, phase: 'gameOver', winner: playerColor }));
+              supabase.from('game_rooms').update({
+                status: 'finished',
+                game_state: gameStateToJSON({ ...gameState, phase: 'gameOver', winner: playerColor })
+              }).eq('id', roomId);
+            }, RECONNECT_GRACE_PERIOD);
           }
 
           // Security & Cleanup: Check if anyone is left
@@ -235,6 +284,16 @@ export function OnlineGameView({ roomId, onBack, profile }: OnlineGameViewProps)
           if (Object.keys(state).length === 0) {
             console.log("Room empty, cleaning up...");
             await supabase.rpc('delete_game_room_data', { room_uuid: roomId });
+          }
+        })
+        .on('presence', { event: 'join' }, (payload: any) => {
+          // Opponent reconnected - cancel forfeit timer
+          if (payload.key !== playerId && reconnectTimeoutRef.current) {
+            clearTimeout(reconnectTimeoutRef.current);
+            reconnectTimeoutRef.current = null;
+            setConnectionStatus('connected');
+            setOpponentConnected(true);
+            setOpponentDisconnected(false);
           }
         })
         .subscribe(async (status: any) => {
@@ -288,11 +347,8 @@ export function OnlineGameView({ roomId, onBack, profile }: OnlineGameViewProps)
     return () => { if (timerRef.current) clearInterval(timerRef.current); };
   }, [roomStatus, gameState.phase, gameState.currentPlayer, opponentConnected]);
 
-  // Reset timers on turn change
-  useEffect(() => {
-    setWhiteTimer(45);
-    setBlackTimer(45);
-  }, [gameState.currentPlayer, gameState.moveHistory?.length]);
+  // Note: Timer reset on turn change removed - server now handles timer deduction
+  // Local timer just counts down for display, synced from server on each move
 
   // Consensus Play Again Trigger
   useEffect(() => {
@@ -306,7 +362,12 @@ export function OnlineGameView({ roomId, onBack, profile }: OnlineGameViewProps)
             status: 'playing',
             forfeit_winner: null,
             white_wants_play_again: false,
-            black_wants_play_again: false
+            black_wants_play_again: false,
+            // Reset server-side timers
+            white_time_remaining: 600,
+            black_time_remaining: 600,
+            last_move_at: new Date().toISOString(),
+            active_player: 'white'
           }).eq('id', roomId);
         }
       }
@@ -561,7 +622,7 @@ export function OnlineGameView({ roomId, onBack, profile }: OnlineGameViewProps)
           }}
         >
           <div className="flex items-center justify-between">
-            <button onClick={onBack} className="flex items-center gap-2 hover:opacity-80 transition-colors" style={{ color: theme.textColor }}>
+            <button onClick={() => { handleLeaveRoom(); onBack(); }} className="flex items-center gap-2 hover:opacity-80 transition-colors" style={{ color: theme.textColor }}>
               <Home className="w-5 h-5" />
               <span className="font-bold text-sm" style={{ color: theme.titleColor }}>Nav Goti</span>
             </button>
@@ -806,7 +867,7 @@ export function OnlineGameView({ roomId, onBack, profile }: OnlineGameViewProps)
                 {gameState.phase === 'gameOver' || roomStatus === 'finished' ? (
                   <>
                     {!opponentDisconnected && <Button onClick={handlePlayAgain} variant="ghost" className="flex flex-col h-auto py-2" style={{ color: theme.textColor }}><RefreshCw className="w-5 h-5 mb-1" /><span className="text-[10px]">Retry</span></Button>}
-                    <Button variant="ghost" onClick={onBack} className="flex flex-col h-auto py-2" style={{ color: theme.textColor }}><Home className="w-5 h-5 mb-1" /><span className="text-[10px]">Menu</span></Button>
+                    <Button variant="ghost" onClick={() => { handleLeaveRoom(); onBack(); }} className="flex flex-col h-auto py-2" style={{ color: theme.textColor }}><Home className="w-5 h-5 mb-1" /><span className="text-[10px]">Menu</span></Button>
                     <Button
                       variant="ghost"
                       onClick={handleBackHistory}
