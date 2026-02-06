@@ -98,11 +98,17 @@ CREATE TABLE IF NOT EXISTS public.game_rooms (
   forfeit_winner TEXT,
   white_wants_play_again BOOLEAN DEFAULT FALSE,
   black_wants_play_again BOOLEAN DEFAULT FALSE,
-  -- Server-side timer columns (10 minutes = 600 seconds)
+  -- Server-side timer columns (10 minutes = 600 seconds) - LEGACY
   white_time_remaining INTEGER DEFAULT 600,
   black_time_remaining INTEGER DEFAULT 600,
   last_move_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
-  active_player TEXT DEFAULT 'white'
+  active_player TEXT DEFAULT 'white',
+  -- NEW: 45-second turn timer system
+  turn_timer_start TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+  -- NEW: Draw offer system
+  draw_offered_by TEXT DEFAULT NULL,
+  -- NEW: How game ended (timeout, resign, draw, disconnect, checkmate)
+  end_reason TEXT DEFAULT NULL
 );
 
 -- Add columns if they don't exist (for existing tables)
@@ -134,6 +140,18 @@ DO $$ BEGIN
   END IF;
   IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'game_rooms' AND column_name = 'active_player') THEN
     ALTER TABLE public.game_rooms ADD COLUMN active_player TEXT DEFAULT 'white';
+  END IF;
+  -- NEW: 45-second turn timer
+  IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'game_rooms' AND column_name = 'turn_timer_start') THEN
+    ALTER TABLE public.game_rooms ADD COLUMN turn_timer_start TIMESTAMP WITH TIME ZONE DEFAULT NOW();
+  END IF;
+  -- NEW: Draw offer system
+  IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'game_rooms' AND column_name = 'draw_offered_by') THEN
+    ALTER TABLE public.game_rooms ADD COLUMN draw_offered_by TEXT DEFAULT NULL;
+  END IF;
+  -- NEW: End reason
+  IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'game_rooms' AND column_name = 'end_reason') THEN
+    ALTER TABLE public.game_rooms ADD COLUMN end_reason TEXT DEFAULT NULL;
   END IF;
 END $$;
 

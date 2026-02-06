@@ -36,6 +36,9 @@ import {
 
 import { getTheme } from "@/lib/themes";
 import { GameChat } from "@/components/GameChat";
+import { GameOverOverlay } from "@/components/GameOverOverlay";
+import { DrawOfferModal } from "@/components/DrawOfferModal";
+import { playTurnStartSound, playWarningSound, playGameOverSound, playMoveSound, playDrawOfferSound } from "@/lib/sounds";
 
 interface OnlineGameViewProps {
   roomId: string;
@@ -100,12 +103,25 @@ export function OnlineGameView({ roomId, onBack, profile }: OnlineGameViewProps)
   const [isChatOpen, setIsChatOpen] = useState(false);
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [unreadMessages, setUnreadMessages] = useState(0);
-  // Server-synced timers (10 minutes = 600 seconds)
-  const [whiteTimer, setWhiteTimer] = useState(600);
-  const [blackTimer, setBlackTimer] = useState(600);
+
+  // 45-second turn timer (resets each turn)
+  const TURN_TIME_LIMIT = 45;
+  const WARNING_TIME = 10;
+  const [turnTimer, setTurnTimer] = useState(TURN_TIME_LIMIT);
+  const lastCurrentPlayerRef = useRef<string | null>(null);
+
   const [whiteWantsPlayAgain, setWhiteWantsPlayAgain] = useState(false);
   const [blackWantsPlayAgain, setBlackWantsPlayAgain] = useState(false);
   const timerRef = useRef<NodeJS.Timeout | null>(null);
+
+  // Draw offer system
+  const [drawOfferedBy, setDrawOfferedBy] = useState<string | null>(null);
+  const [showDrawModal, setShowDrawModal] = useState(false);
+  const [drawOffererName, setDrawOffererName] = useState('Opponent');
+
+  // Game over overlay
+  const [showGameOverOverlay, setShowGameOverOverlay] = useState(false);
+  const [endReason, setEndReason] = useState<string | null>(null);
 
   // Connection status for reconnection handling
   const [connectionStatus, setConnectionStatus] = useState<'connected' | 'reconnecting' | 'disconnected'>('connected');
@@ -198,6 +214,13 @@ export function OnlineGameView({ roomId, onBack, profile }: OnlineGameViewProps)
           setWhiteName(updatedRoom.white_player_name || 'Guest');
           setBlackName(updatedRoom.black_player_name || 'Guest');
           if (updatedRoom.status === 'playing') gameStartedRef.current = true;
+
+          // Sync turn timer for late join/refresh
+          if (updatedRoom.turn_timer_start) {
+            const start = new Date(updatedRoom.turn_timer_start).getTime();
+            const elapsed = Math.floor((Date.now() - start) / 1000);
+            setTurnTimer(Math.max(0, TURN_TIME_LIMIT - elapsed));
+          }
         }
       } else {
         const initialState = createInitialState();
@@ -242,13 +265,30 @@ export function OnlineGameView({ roomId, onBack, profile }: OnlineGameViewProps)
           if (room.white_wants_play_again && room.black_wants_play_again && room.status === 'playing' && serverState.phase === 'placing' && serverState.moveHistory?.length === 0) {
             // Success reset
             forfeitHandled.current = false;
-            setWhiteTimer(600);
-            setBlackTimer(600);
+            setTurnTimer(TURN_TIME_LIMIT);
+            setEndReason(null);
+            setShowGameOverOverlay(false);
           }
 
-          // Sync timers from server (authoritative source)
-          if (room.white_time_remaining !== undefined) setWhiteTimer(room.white_time_remaining);
-          if (room.black_time_remaining !== undefined) setBlackTimer(room.black_time_remaining);
+          // Handle draw offer detection
+          if (room.draw_offered_by && room.draw_offered_by !== playerId) {
+            setDrawOfferedBy(room.draw_offered_by);
+            setDrawOffererName(room.draw_offered_by === room.white_player_id ? room.white_player_name : room.black_player_name || 'Opponent');
+            setShowDrawModal(true);
+            playDrawOfferSound();
+          } else {
+            setShowDrawModal(false);
+            setDrawOfferedBy(null);
+          }
+
+          // Handle game end
+          if ((room.status === 'finished' || room.status === 'forfeited') && room.end_reason) {
+            setEndReason(room.end_reason);
+            if (!showGameOverOverlay) {
+              setShowGameOverOverlay(true);
+              playGameOverSound();
+            }
+          }
         })
         .on('presence', { event: 'sync' }, () => {
           const state = channel?.presenceState() || {};
@@ -317,7 +357,7 @@ export function OnlineGameView({ roomId, onBack, profile }: OnlineGameViewProps)
     return () => { isMounted = false; clearInterval(pollingInterval); if (channel) supabase.removeChannel(channel); };
   }, [roomId, playerId, playerName, playerColor, gameState]);
 
-  // Timer Countdown Logic
+  // 45-Second Turn Timer Countdown
   useEffect(() => {
     if (roomStatus !== 'playing' || gameState.phase === 'gameOver' || !opponentConnected) {
       if (timerRef.current) clearInterval(timerRef.current);
@@ -325,30 +365,36 @@ export function OnlineGameView({ roomId, onBack, profile }: OnlineGameViewProps)
     }
 
     timerRef.current = setInterval(() => {
-      if (gameState.currentPlayer === 'white') {
-        setWhiteTimer(t => {
-          if (t <= 1) {
-            handleTimerForfeit('white');
-            return 0;
+      setTurnTimer((prev: number) => {
+        // Play warning sound at 10 seconds
+        if (prev === WARNING_TIME + 1) {
+          playWarningSound();
+        }
+
+        if (prev <= 1) {
+          // Time's up - only the active player's client should handle timeout
+          if (gameState.currentPlayer === playerColor) {
+            handleTimeout();
           }
-          return t - 1;
-        });
-      } else {
-        setBlackTimer(t => {
-          if (t <= 1) {
-            handleTimerForfeit('black');
-            return 0;
-          }
-          return t - 1;
-        });
-      }
+          return 0;
+        }
+        return prev - 1;
+      });
     }, 1000);
 
     return () => { if (timerRef.current) clearInterval(timerRef.current); };
-  }, [roomStatus, gameState.phase, gameState.currentPlayer, opponentConnected]);
+  }, [roomStatus, gameState.phase, gameState.currentPlayer, opponentConnected, playerColor]);
 
-  // Note: Timer reset on turn change removed - server now handles timer deduction
-  // Local timer just counts down for display, synced from server on each move
+  // Reset timer when turn changes and play turn start sound
+  useEffect(() => {
+    if (lastCurrentPlayerRef.current !== null && lastCurrentPlayerRef.current !== gameState.currentPlayer) {
+      setTurnTimer(TURN_TIME_LIMIT);
+      if (gameState.currentPlayer === playerColor) {
+        playTurnStartSound();
+      }
+    }
+    lastCurrentPlayerRef.current = gameState.currentPlayer;
+  }, [gameState.currentPlayer, playerColor]);
 
   // Consensus Play Again Trigger
   useEffect(() => {
@@ -363,11 +409,11 @@ export function OnlineGameView({ roomId, onBack, profile }: OnlineGameViewProps)
             forfeit_winner: null,
             white_wants_play_again: false,
             black_wants_play_again: false,
-            // Reset server-side timers
-            white_time_remaining: 600,
-            black_time_remaining: 600,
-            last_move_at: new Date().toISOString(),
-            active_player: 'white'
+            // Reset turn timer
+            turn_timer_start: new Date().toISOString(),
+            active_player: 'white',
+            draw_offered_by: null,
+            end_reason: null
           }).eq('id', roomId);
         }
       }
@@ -375,14 +421,86 @@ export function OnlineGameView({ roomId, onBack, profile }: OnlineGameViewProps)
     checkConsensus();
   }, [whiteWantsPlayAgain, blackWantsPlayAgain, playerColor, roomId]);
 
-  const handleTimerForfeit = async (timedOutPlayer: 'white' | 'black') => {
+  // Timeout handler - called when 45-second timer reaches 0
+  const handleTimeout = async () => {
     if (forfeitHandled.current || gameState.phase === 'gameOver') return;
     forfeitHandled.current = true;
-    const winner = timedOutPlayer === 'white' ? 'black' : 'white';
+
+    const winner = playerColor === 'white' ? 'black' : 'white';
     const forfeitState = { ...gameState, phase: 'gameOver' as const, winner: winner as Player };
-    await supabase.from('game_rooms').update({ status: 'forfeited', forfeit_winner: winner, game_state: gameStateToJSON(forfeitState) }).eq('id', roomId);
+
+    await supabase.from('game_rooms').update({
+      status: 'finished',
+      forfeit_winner: winner,
+      end_reason: 'timeout',
+      game_state: gameStateToJSON(forfeitState)
+    }).eq('id', roomId);
+
     setGameState(forfeitState);
     setRoomStatus('finished');
+    setEndReason('timeout');
+    setShowGameOverOverlay(true);
+    playGameOverSound();
+  };
+
+  // Resign handler - player voluntarily loses
+  const handleResign = async () => {
+    if (forfeitHandled.current || gameState.phase === 'gameOver') return;
+    forfeitHandled.current = true;
+
+    const winner = playerColor === 'white' ? 'black' : 'white';
+    const forfeitState = { ...gameState, phase: 'gameOver' as const, winner: winner as Player };
+
+    await supabase.from('game_rooms').update({
+      status: 'finished',
+      forfeit_winner: winner,
+      end_reason: 'resign',
+      game_state: gameStateToJSON(forfeitState)
+    }).eq('id', roomId);
+
+    setGameState(forfeitState);
+    setRoomStatus('finished');
+    setEndReason('resign');
+    setShowGameOverOverlay(true);
+    playGameOverSound();
+  };
+
+  // Draw offer handlers
+  const handleOfferDraw = async () => {
+    await supabase.from('game_rooms')
+      .update({ draw_offered_by: playerId })
+      .eq('id', roomId);
+  };
+
+  const handleAcceptDraw = async () => {
+    const drawState = { ...gameState, phase: 'gameOver' as const, winner: null };
+    await supabase.from('game_rooms')
+      .update({
+        status: 'finished',
+        end_reason: 'draw',
+        draw_offered_by: null,
+        game_state: gameStateToJSON(drawState)
+      })
+      .eq('id', roomId);
+
+    setGameState(drawState);
+    setRoomStatus('finished');
+    setEndReason('draw');
+    setShowDrawModal(false);
+    setShowGameOverOverlay(true);
+    playGameOverSound();
+  };
+
+  const handleDeclineDraw = async () => {
+    await supabase.from('game_rooms')
+      .update({ draw_offered_by: null })
+      .eq('id', roomId);
+    setShowDrawModal(false);
+  };
+
+  // Legacy handler - kept for backward compatibility  
+  const handleTimerForfeit = async (timedOutPlayer: 'white' | 'black') => {
+    await handleTimeout();
   };
 
   const formatTime = (seconds: number) => {
@@ -392,11 +510,19 @@ export function OnlineGameView({ roomId, onBack, profile }: OnlineGameViewProps)
   };
 
   const updateGameState = async (newState: GameState) => {
+    // Sync turn timer and active player on server
     await supabase.from('game_rooms').update({
       game_state: gameStateToJSON(newState),
       status: newState.phase === 'gameOver' ? 'finished' : 'playing',
+      active_player: newState.currentPlayer,
+      turn_timer_start: new Date().toISOString(),
       updated_at: new Date().toISOString()
     }).eq('id', roomId);
+
+    // Play move sound if turn changed or piece was removed
+    if (newState.currentPlayer !== gameState.currentPlayer || newState.mustRemove !== gameState.mustRemove) {
+      playMoveSound();
+    }
   };
 
   const isPlayerTurn = playerColor === gameState.currentPlayer;
@@ -435,10 +561,6 @@ export function OnlineGameView({ roomId, onBack, profile }: OnlineGameViewProps)
       setGameState(forfeitState);
       setRoomStatus('finished');
     }
-  };
-
-  const handleOfferDraw = () => {
-    handleSendDrawOffer();
   };
 
   const handlePositionClick = useCallback(async (position: Position) => {
@@ -491,9 +613,12 @@ export function OnlineGameView({ roomId, onBack, profile }: OnlineGameViewProps)
   const getStatusMessage = () => {
     if (roomStatus === 'loading') return 'Connecting...';
     if (roomStatus === 'waiting') return 'Waiting for opponent...';
+    if (connectionStatus === 'reconnecting') return 'Opponent reconnecting...';
     if (gameState.phase === 'gameOver') {
       if (opponentDisconnected) return 'Opponent left - You win!';
-      if (whiteTimer === 0 || blackTimer === 0) return 'Time out - ' + (gameState.winner === playerColor ? 'You win!' : 'You lose!');
+      if (endReason === 'timeout') return 'Time out - ' + (gameState.winner === playerColor ? 'You win!' : 'You lose!');
+      if (endReason === 'resign') return gameState.winner === playerColor ? 'Opponent resigned - You win!' : 'You resigned!';
+      if (endReason === 'draw') return 'Game ended in a draw!';
       return gameState.winner === playerColor ? 'You win!' : 'You lose!';
     }
     if (!isPlayerTurn) return "Opponent's turn...";
@@ -505,85 +630,6 @@ export function OnlineGameView({ roomId, onBack, profile }: OnlineGameViewProps)
     navigator.clipboard.writeText(roomId);
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
-  };
-
-  // Draw Offer States
-  const [incomingDrawOffer, setIncomingDrawOffer] = useState<{ id: string, from_player_name: string } | null>(null);
-
-  useEffect(() => {
-    if (roomStatus !== 'playing') return;
-
-    const channel = supabase
-      .channel(`draw_offers:${roomId}`)
-      .on('postgres_changes', {
-        event: 'INSERT',
-        schema: 'public',
-        table: 'draw_offers',
-        filter: `room_id=eq.${roomId}`
-      }, async (payload: any) => {
-        const offer = payload.new;
-        if (offer.offered_by_player_id !== playerId && offer.status === 'pending') {
-          // Get opponent name
-          const { data: profile } = await supabase.from('profiles').select('name').eq('id', offer.offered_by_player_id).single();
-          setIncomingDrawOffer({ id: offer.id, from_player_name: profile?.name || 'Opponent' });
-        }
-      })
-      .on('postgres_changes', {
-        event: 'UPDATE',
-        schema: 'public',
-        table: 'draw_offers',
-        filter: `room_id=eq.${roomId}`
-      }, (payload: any) => {
-        const offer = payload.new;
-        if (offer.status === 'accepted' && roomStatus === 'playing') {
-          setGameState(prev => ({ ...prev, phase: 'gameOver', winner: null }));
-          setRoomStatus('finished');
-          alert("Draw accepted! The game is over.");
-        } else if (offer.status === 'declined' && offer.offered_by_player_id === playerId) {
-          alert("Draw offer declined.");
-        }
-      })
-      .subscribe();
-
-    return () => { supabase.removeChannel(channel); };
-  }, [roomId, playerId, roomStatus]);
-
-  const handleSendDrawOffer = async () => {
-    if (gameState.phase === 'gameOver') return;
-    const { error } = await supabase.from('draw_offers').insert({
-      room_id: roomId,
-      offered_by_player_id: playerId,
-      status: 'pending'
-    });
-    if (error) alert("Failed to send draw offer");
-    else alert("Draw offer sent to opponent");
-  };
-
-  const handleAcceptDraw = async () => {
-    if (!incomingDrawOffer) return;
-    await supabase.from('draw_offers').update({
-      status: 'accepted',
-      responded_at: new Date().toISOString()
-    }).eq('id', incomingDrawOffer.id);
-
-    const drawState = { ...gameState, phase: 'gameOver' as const, winner: null };
-    await supabase.from('game_rooms').update({
-      status: 'finished',
-      game_state: gameStateToJSON(drawState)
-    }).eq('id', roomId);
-
-    setGameState(drawState);
-    setRoomStatus('finished');
-    setIncomingDrawOffer(null);
-  };
-
-  const handleDeclineDraw = async () => {
-    if (!incomingDrawOffer) return;
-    await supabase.from('draw_offers').update({
-      status: 'declined',
-      responded_at: new Date().toISOString()
-    }).eq('id', incomingDrawOffer.id);
-    setIncomingDrawOffer(null);
   };
 
   return (
@@ -727,8 +773,8 @@ export function OnlineGameView({ roomId, onBack, profile }: OnlineGameViewProps)
                     </div>
                   </div>
                 </div>
-                <div className={`px-3 py-1.5 rounded-md font-mono text-lg font-bold w-[70px] shrink-0 text-center tabular-nums ${(playerColor === 'white' ? blackTimer : whiteTimer) < 10 ? 'animate-pulse text-red-500' : ''}`} style={{ backgroundColor: theme.appBackground + '80', color: (playerColor === 'white' ? blackTimer : whiteTimer) < 10 ? '#ef4444' : theme.textColor }}>
-                  {formatTime(playerColor === 'white' ? blackTimer : whiteTimer)}
+                <div className={`px-3 py-1.5 rounded-md font-mono text-lg font-bold w-[70px] shrink-0 text-center tabular-nums ${turnTimer < 10 ? 'animate-pulse text-red-500' : ''}`} style={{ backgroundColor: theme.appBackground + '80', color: turnTimer < 10 ? '#ef4444' : theme.textColor }}>
+                  {formatTime(turnTimer)}
                 </div>
               </div>
 
@@ -801,22 +847,13 @@ export function OnlineGameView({ roomId, onBack, profile }: OnlineGameViewProps)
                   />
                 </div>
 
-                {/* Draw Offer Dialog */}
-                {incomingDrawOffer && (
-                  <div className="absolute inset-0 z-50 flex items-center justify-center p-6 bg-black/60 backdrop-blur-sm">
-                    <div className="w-full max-w-xs p-6 rounded-2xl shadow-2xl border flex flex-col items-center text-center" style={{ backgroundColor: theme.cardBg, borderColor: theme.accentColor + '40' }}>
-                      <div className="w-16 h-16 bg-blue-500/20 rounded-full flex items-center justify-center mb-4 text-3xl">🤝</div>
-                      <h3 className="text-xl font-bold mb-2" style={{ color: theme.textColor }}>Draw Offered</h3>
-                      <p className="text-sm opacity-80 mb-6" style={{ color: theme.textColor }}>
-                        {incomingDrawOffer.from_player_name} is offering a draw.
-                      </p>
-                      <div className="flex w-full gap-3">
-                        <Button onClick={handleDeclineDraw} variant="outline" className="flex-1 font-bold">Decline</Button>
-                        <Button onClick={handleAcceptDraw} className="flex-1 font-bold bg-blue-600 hover:bg-blue-700">Accept</Button>
-                      </div>
-                    </div>
-                  </div>
-                )}
+                {/* Draw Offer Modal - Using new component */}
+                <DrawOfferModal
+                  isOpen={showDrawModal}
+                  offeredByName={drawOffererName}
+                  onAccept={handleAcceptDraw}
+                  onDecline={handleDeclineDraw}
+                />
               </div>
 
               {/* Bottom Player Bar */}
@@ -856,8 +893,8 @@ export function OnlineGameView({ roomId, onBack, profile }: OnlineGameViewProps)
                       ))
                     }
                   </div>
-                  <div className={`px-3 py-1.5 rounded-md font-mono text-lg font-bold w-[70px] shrink-0 text-center tabular-nums ${(playerColor === 'white' ? whiteTimer : blackTimer) < 10 ? 'animate-pulse text-red-500' : ''}`} style={{ backgroundColor: theme.appBackground + '80', color: (playerColor === 'white' ? whiteTimer : blackTimer) < 10 ? '#ef4444' : theme.textColor }}>
-                    {formatTime(playerColor === 'white' ? whiteTimer : blackTimer)}
+                  <div className={`px-3 py-1.5 rounded-md font-mono text-lg font-bold w-[70px] shrink-0 text-center tabular-nums ${turnTimer < 10 ? 'animate-pulse text-red-500' : ''}`} style={{ backgroundColor: theme.appBackground + '80', color: turnTimer < 10 ? '#ef4444' : theme.textColor }}>
+                    {formatTime(turnTimer)}
                   </div>
                 </div>
               </div>
@@ -976,7 +1013,7 @@ export function OnlineGameView({ roomId, onBack, profile }: OnlineGameViewProps)
                     </div>
 
                     <Button
-                      onClick={() => { handleSendDrawOffer(); setIsMenuOpen(false); }}
+                      onClick={() => { handleOfferDraw(); setIsMenuOpen(false); }}
                       variant="outline"
                       className="w-full justify-start h-12 text-base font-medium"
                       style={{ borderColor: theme.lineColor + '40' }}
@@ -985,12 +1022,12 @@ export function OnlineGameView({ roomId, onBack, profile }: OnlineGameViewProps)
                     </Button>
 
                     <Button
-                      onClick={() => { handleAbort(); setIsMenuOpen(false); }}
+                      onClick={() => { handleResign(); setIsMenuOpen(false); }}
                       variant="outline"
                       className="w-full justify-start h-12 text-base font-medium text-red-500 hover:text-red-600 hover:bg-red-500/10"
                       style={{ borderColor: theme.lineColor + '40' }}
                     >
-                      <Flag className="mr-3 w-5 h-5" /> Abort Game
+                      <Flag className="mr-3 w-5 h-5" /> Resign
                     </Button>
                   </div>
                 </div>
@@ -1030,7 +1067,7 @@ export function OnlineGameView({ roomId, onBack, profile }: OnlineGameViewProps)
               <div className="p-4 border-b space-y-4 shrink-0" style={{ borderColor: theme.lineColor + '10' }}>
                 <div className="grid grid-cols-2 gap-2">
                   <Button
-                    onClick={handleSendDrawOffer}
+                    onClick={handleOfferDraw}
                     variant="outline"
                     size="sm"
                     className="w-full text-xs"
@@ -1040,14 +1077,14 @@ export function OnlineGameView({ roomId, onBack, profile }: OnlineGameViewProps)
                     <Handshake className="mr-2 w-3 h-3" /> Offer Draw
                   </Button>
                   <Button
-                    onClick={handleAbort}
+                    onClick={handleResign}
                     variant="outline"
                     size="sm"
                     className="w-full text-xs text-red-500 hover:text-red-600 hover:bg-red-500/10"
                     style={{ borderColor: theme.lineColor + '40' }}
                     disabled={gameState.phase === 'gameOver'}
                   >
-                    <Flag className="mr-2 w-3 h-3" /> Abort
+                    <Flag className="mr-2 w-3 h-3" /> Resign
                   </Button>
                 </div>
 
@@ -1143,6 +1180,20 @@ export function OnlineGameView({ roomId, onBack, profile }: OnlineGameViewProps)
           </div>
         )}
       </div>
+
+      {/* Game Over Overlay */}
+      {showGameOverOverlay && gameState.phase === 'gameOver' && (
+        <GameOverOverlay
+          isWinner={endReason === 'draw' ? null : (gameState.winner === playerColor)}
+          reason={endReason || 'checkmate'}
+          onBackToLobby={() => {
+            setShowGameOverOverlay(false);
+            handleLeaveRoom();
+            onBack();
+          }}
+          opponentName={playerColor === 'white' ? blackName : whiteName}
+        />
+      )}
     </div>
   );
 }
